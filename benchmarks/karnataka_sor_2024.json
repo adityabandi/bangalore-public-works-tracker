@@ -1,0 +1,108 @@
+{
+  "metadata": {
+    "source": "Karnataka PWD Schedule of Rates 2024-25",
+    "url": "https://kpwd.karnataka.gov.in/page/Schedule+of+Rates+(SR)/2024-25/en",
+    "extracted_by": "manual",
+    "notes": "Key rates for common BBMP work types. Rates are approximate and vary by specification. Expand as SoR PDFs are parsed."
+  },
+  "rates": {
+    "roads": {
+      "bituminous_resurfacing_40mm_bc": {
+        "unit": "sqm",
+        "rate_inr": 580,
+        "description": "40mm Bituminous Concrete (BC) resurfacing"
+      },
+      "bituminous_resurfacing_25mm_sdbc": {
+        "unit": "sqm",
+        "rate_inr": 380,
+        "description": "25mm Semi Dense Bituminous Concrete (SDBC)"
+      },
+      "wbm_road_150mm": {
+        "unit": "sqm",
+        "rate_inr": 450,
+        "description": "150mm Water Bound Macadam road base"
+      },
+      "concrete_road_200mm": {
+        "unit": "sqm",
+        "rate_inr": 1800,
+        "description": "200mm CC road (white-topping)"
+      },
+      "footpath_paver_blocks_60mm": {
+        "unit": "sqm",
+        "rate_inr": 1200,
+        "description": "60mm interlocking paver block footpath"
+      },
+      "pothole_filling_bituminous": {
+        "unit": "sqm",
+        "rate_inr": 250,
+        "description": "Pothole repair with bituminous mix"
+      },
+      "milling_existing_road": {
+        "unit": "sqm",
+        "rate_inr": 120,
+        "description": "Milling of existing bituminous surface"
+      }
+    },
+    "drainage": {
+      "rcc_drain_600mm": {
+        "unit": "rm",
+        "rate_inr": 4500,
+        "description": "600mm RCC drain construction"
+      },
+      "rcc_drain_900mm": {
+        "unit": "rm",
+        "rate_inr": 7200,
+        "description": "900mm RCC drain construction"
+      },
+      "rcc_drain_1200mm": {
+        "unit": "rm",
+        "rate_inr": 12000,
+        "description": "1200mm RCC drain construction"
+      },
+      "desilting_drain": {
+        "unit": "rm",
+        "rate_inr": 350,
+        "description": "Desilting of existing drain"
+      },
+      "retaining_wall_rubble": {
+        "unit": "cum",
+        "rate_inr": 6500,
+        "description": "Rubble masonry retaining wall"
+      }
+    },
+    "buildings": {
+      "construction_general_rcc": {
+        "unit": "sqm",
+        "rate_inr": 18000,
+        "description": "General RCC building construction per sqm built-up area"
+      },
+      "painting_exterior": {
+        "unit": "sqm",
+        "rate_inr": 120,
+        "description": "Exterior weather-proof painting"
+      },
+      "painting_interior": {
+        "unit": "sqm",
+        "rate_inr": 80,
+        "description": "Interior emulsion painting"
+      },
+      "compound_wall_rcc": {
+        "unit": "rm",
+        "rate_inr": 3500,
+        "description": "RCC compound wall per running meter"
+      }
+    },
+    "lighting": {
+      "led_street_light_100w": {
+        "unit": "nos",
+        "rate_inr": 15000,
+        "description": "100W LED street light with pole"
+      },
+      "high_mast_light_20m": {
+        "unit": "nos",
+        "rate_inr": 350000,
+        "description": "20m high mast light installation"
+      }
+    }
+  }
+}

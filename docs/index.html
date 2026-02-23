@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bangalore Public Works Tracker</title>
+    <meta name="description" content="Automated anomaly detection in BBMP public works spending. Track contractor concentration, cost overruns, and suspicious patterns across Bangalore wards.">
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <!-- Header -->
+    <header id="header">
+        <div class="header-content">
+            <div class="header-title">
+                <h1>Bangalore Public Works Tracker</h1>
+                <p class="subtitle">Automated anomaly detection in BBMP spending</p>
+            </div>
+            <div class="header-stats" id="header-stats">
+                <div class="stat-card">
+                    <span class="stat-value" id="stat-records">--</span>
+                    <span class="stat-label">Work Orders</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-value" id="stat-spend">--</span>
+                    <span class="stat-label">Total Spend</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-value" id="stat-anomalies">--</span>
+                    <span class="stat-label">Anomalies Flagged</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-value" id="stat-updated">--</span>
+                    <span class="stat-label">Last Updated</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main>
+        <!-- Map + Ward Detail Panel -->
+        <section class="section" id="map-section">
+            <h2>Ward Anomaly Map</h2>
+            <p class="section-desc">Wards colored by anomaly score. Click a ward for details.</p>
+            <div class="map-container">
+                <div id="map"></div>
+                <div id="ward-detail" class="ward-detail hidden">
+                    <button class="close-btn" onclick="document.getElementById('ward-detail').classList.add('hidden')">&times;</button>
+                    <h3 id="ward-detail-title">Ward Details</h3>
+                    <div id="ward-detail-content"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Anomaly Feed -->
+        <section class="section" id="anomaly-section">
+            <h2>Anomaly Feed</h2>
+            <div class="filters">
+                <select id="filter-type">
+                    <option value="all">All Types</option>
+                    <option value="cost_outlier">Cost Outliers</option>
+                    <option value="contractor_concentration">Contractor Concentration</option>
+                    <option value="duplicate_work">Duplicate Works</option>
+                    <option value="payment_speed">Payment Speed</option>
+                    <option value="deduction_ratio">Deduction Ratio</option>
+                    <option value="benford_violation">Benford Violations</option>
+                </select>
+                <select id="filter-severity">
+                    <option value="all">All Severity</option>
+                    <option value="critical">Critical</option>
+                    <option value="high">High</option>
+                    <option value="medium">Medium</option>
+                    <option value="low">Low</option>
+                </select>
+                <input type="text" id="filter-search" placeholder="Search wards, contractors...">
+            </div>
+            <div id="anomaly-feed" class="anomaly-feed"></div>
+            <button id="load-more" class="load-more hidden">Load More</button>
+        </section>
+
+        <!-- Charts -->
+        <section class="section" id="charts-section">
+            <h2>Analytics</h2>
+            <div class="charts-grid">
+                <div class="chart-card">
+                    <h3>Spending by Category</h3>
+                    <canvas id="chart-category"></canvas>
+                </div>
+                <div class="chart-card">
+                    <h3>Top 10 Contractors</h3>
+                    <canvas id="chart-contractors"></canvas>
+                </div>
+                <div class="chart-card">
+                    <h3>Yearly Spending Trend</h3>
+                    <canvas id="chart-yearly"></canvas>
+                </div>
+                <div class="chart-card">
+                    <h3>Anomalies by Type</h3>
+                    <canvas id="chart-anomaly-types"></canvas>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer>
+        <p>
+            Data from <a href="https://data.opencity.in" target="_blank" rel="noopener">OpenCity.in</a> |
+            Ward boundaries from <a href="https://github.com/datameet/Municipal_Spatial_Data" target="_blank" rel="noopener">DataMeet</a> |
+            <a href="https://github.com" target="_blank" rel="noopener">View Source</a>
+        </p>
+        <p class="disclaimer">
+            This tool flags statistical anomalies for further investigation.
+            Flagged items are not accusations of wrongdoing.
+        </p>
+    </footer>
+
+    <script src="js/app.js"></script>
+    <script src="js/map.js"></script>
+    <script src="js/charts.js"></script>
+    <script src="js/anomalies.js"></script>
+</body>
+</html>

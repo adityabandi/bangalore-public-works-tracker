@@ -1,0 +1,60 @@
+name: Daily Data Pipeline
+
+on:
+  schedule:
+    - cron: '30 2 * * *'  # 2:30 AM UTC = 8:00 AM IST
+  workflow_dispatch:       # Manual trigger
+
+permissions:
+  contents: write
+
+jobs:
+  pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Fetch data from OpenCity.in
+        id: fetch
+        run: |
+          python scripts/fetch_data.py
+          echo "changed=$(python -c "import json; print(str(json.load(open('data/fetch_status.json'))['changed']).lower())")" >> $GITHUB_OUTPUT
+
+      - name: Normalize data
+        if: steps.fetch.outputs.changed == 'true'
+        run: python scripts/normalize.py
+
+      - name: Detect anomalies
+        if: steps.fetch.outputs.changed == 'true'
+        run: python scripts/detect_anomalies.py
+
+      - name: Generate site data
+        if: steps.fetch.outputs.changed == 'true'
+        run: python scripts/generate_site_data.py
+
+      - name: Copy site data to docs
+        if: steps.fetch.outputs.changed == 'true'
+        run: cp data/site/*.json docs/data/
+
+      - name: Commit and push
+        if: steps.fetch.outputs.changed == 'true'
+        run: |
+          git config user.name "BBMP Tracker Bot"
+          git config user.email "bot@bbmp-tracker.github.io"
+          git add data/site/ docs/data/ data/hashes.json data/fetch_status.json
+          git diff --staged --quiet || git commit -m "data: update $(date -u +%Y-%m-%d)"
+          git push
