@@ -58,7 +58,8 @@ def generate_meta(df: pd.DataFrame, anomalies: list) -> dict:
         "total_spend_crores": round(df["gross"].sum() / 1e7, 2),
         "categories": sorted(df["category"].unique().tolist()),
         "fiscal_years": sorted(
-            [fy for fy in df["fiscal_year"].unique() if fy], reverse=True
+            [fy for fy in df["fiscal_year"].unique() if isinstance(fy, str) and fy],
+            reverse=True
         ),
     }
 

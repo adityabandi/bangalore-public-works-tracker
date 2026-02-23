@@ -38,10 +38,12 @@ DATASETS = {
 COLUMN_MAP = {
     # ID fields
     "_id": "_id",
+    "id": "_id",
     "sl no": "sl_no",
     "sl. no": "sl_no",
     "sl.no": "sl_no",
     "sl no.": "sl_no",
+    "slno": "sl_no",
     "serial no": "sl_no",
     "job number": "job_number",
     "job no": "job_number",
@@ -52,6 +54,7 @@ COLUMN_MAP = {
     "name of the work": "name_of_work",
     "work name": "name_of_work",
     "work description": "name_of_work",
+    "wodetails": "name_of_work",
 
     # Location
     "ward": "ward",
@@ -85,6 +88,7 @@ COLUMN_MAP = {
     "sbr date": "sbr_date",
     "br number": "br_number",
     "br no": "br_number",
+    "brnumber": "br_number",
     "br date": "br_date",
     "cbr number": "cbr_number",
     "cbr no": "cbr_number",
@@ -95,6 +99,7 @@ COLUMN_MAP = {
     # Amounts
     "gross": "gross",
     "gross amount": "gross",
+    "amount": "gross",
     "gross in words": "gross_words",
     "deduction": "deduction",
     "deduction amount": "deduction",
