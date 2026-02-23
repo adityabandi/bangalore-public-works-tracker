@@ -1,12 +1,11 @@
 """Generate compact JSON files for the static dashboard from processed data."""
 
-import hashlib
 import json
 import logging
 import os
 import sys
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pandas as pd
 
@@ -20,263 +19,403 @@ from config import (
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
+WARD_MAPPING_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "benchmarks", "ward_mapping.json",
+)
+
 
 def load_data():
     """Load processed work orders and anomalies."""
     csv_path = os.path.join(PROCESSED_DIR, "all_work_orders.csv")
-    anomalies_path = os.path.join(PROCESSED_DIR, "anomalies.json")
-
     if not os.path.exists(csv_path):
-        raise FileNotFoundError(f"Run normalize.py first: {csv_path}")
-    if not os.path.exists(anomalies_path):
-        raise FileNotFoundError(f"Run detect_anomalies.py first: {anomalies_path}")
+        logger.error(f"CSV not found: {csv_path}")
+        sys.exit(1)
 
     df = pd.read_csv(csv_path, low_memory=False)
-    date_cols = ["start_date", "end_date", "order_date", "payment_date"]
-    for col in date_cols:
-        if col in df.columns:
-            df[col] = pd.to_datetime(df[col], errors="coerce")
+    logger.info(f"Loaded {len(df)} work orders")
 
-    with open(anomalies_path) as f:
-        anomalies = json.load(f)
+    for col in ["gross", "deduction", "nett"]:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+
+    anomalies_path = os.path.join(PROCESSED_DIR, "anomalies.json")
+    anomalies = []
+    if os.path.exists(anomalies_path):
+        with open(anomalies_path) as f:
+            anomalies = json.load(f)
+        logger.info(f"Loaded {len(anomalies)} anomalies")
 
     return df, anomalies
 
 
-def generate_meta(df: pd.DataFrame, anomalies: list) -> dict:
-    """Dashboard metadata."""
-    min_date = df["order_date"].min()
-    max_date = df["order_date"].max()
+def load_ward_mapping():
+    """Load ward name and zone mapping from benchmarks/ward_mapping.json."""
+    if not os.path.exists(WARD_MAPPING_PATH):
+        logger.warning(f"Ward mapping not found: {WARD_MAPPING_PATH}")
+        return {}, {}
+    with open(WARD_MAPPING_PATH) as f:
+        data = json.load(f)
+    names = data.get("ward_198_to_name", {})
+    zones = data.get("ward_198_to_zone", {})
+    return names, zones
+
+
+def _gross_lakhs(val):
+    """Convert rupees to lakhs, rounded to 1dp."""
+    try:
+        return round(float(val) / 1e5, 1)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _fiscal_year(date_val):
+    """Return 'YYYY-YY' fiscal year string from a date value."""
+    try:
+        dt = pd.to_datetime(date_val)
+        if dt.month >= 4:
+            return f"{dt.year}-{str(dt.year + 1)[2:]}"
+        return f"{dt.year - 1}-{str(dt.year)[2:]}"
+    except Exception:
+        return "unknown"
+
+
+# ── 1. meta.json ─────────────────────────────────────────────────────────────
+
+def build_meta(df, anomalies):
+    severities = [a.get("severity", "") for a in anomalies]
+    critical = sum(1 for s in severities if s == "critical")
+    high = sum(1 for s in severities if s == "high")
+
+    contractors = df["contractor"].dropna().nunique() if "contractor" in df.columns else 0
+    wards = df["ward_198"].dropna().nunique() if "ward_198" in df.columns else 0
+
     return {
-        "last_updated": datetime.utcnow().isoformat() + "Z",
+        "generated_at": datetime.now(timezone.utc).isoformat(),
         "total_records": len(df),
-        "date_range": {
-            "start": min_date.isoformat()[:10] if pd.notna(min_date) else None,
-            "end": max_date.isoformat()[:10] if pd.notna(max_date) else None,
-        },
-        "anomalies_detected": len(anomalies),
-        "total_spend_crores": round(df["gross"].sum() / 1e7, 2),
-        "categories": sorted(df["category"].unique().tolist()),
-        "fiscal_years": sorted(
-            [fy for fy in df["fiscal_year"].unique() if isinstance(fy, str) and fy],
-            reverse=True
-        ),
+        "total_anomalies": len(anomalies),
+        "critical_anomalies": critical,
+        "high_anomalies": high,
+        "total_wards": int(wards),
+        "total_contractors": int(contractors),
     }
 
 
-def generate_summary(df: pd.DataFrame, anomalies: list) -> dict:
-    """City-wide aggregate statistics."""
+# ── 2. summary.json ───────────────────────────────────────────────────────────
+
+def build_summary(df, anomalies):
+    total_gross = df["gross"].sum() if "gross" in df.columns else 0
+    total_gross_lakhs = _gross_lakhs(total_gross)
+
     by_category = {}
-    for cat, grp in df.groupby("category"):
-        by_category[cat] = {
-            "count": len(grp),
-            "gross_lakhs": round(grp["gross"].sum() / 1e5, 1),
-            "pct": round(len(grp) / len(df) * 100, 1),
-        }
+    if "category" in df.columns and "gross" in df.columns:
+        for cat, grp in df.groupby("category"):
+            by_category[str(cat)] = _gross_lakhs(grp["gross"].sum())
 
-    by_fy = {}
-    for fy, grp in df.groupby("fiscal_year"):
-        if not fy:
-            continue
-        by_fy[fy] = {
-            "count": len(grp),
-            "gross_lakhs": round(grp["gross"].sum() / 1e5, 1),
-        }
-
-    # Anomaly type summary
-    anomaly_types = defaultdict(lambda: {"count": 0, "critical": 0, "high": 0})
+    anomaly_summary = defaultdict(lambda: {"count": 0, "critical": 0, "high": 0, "medium": 0})
     for a in anomalies:
-        t = a["anomaly_type"]
-        anomaly_types[t]["count"] += 1
-        label = a.get("severity_label", "low")
-        if label in ("critical", "high"):
-            anomaly_types[t][label] += 1
+        atype = a.get("anomaly_type", a.get("type", "unknown"))
+        sev = a.get("severity", "")
+        anomaly_summary[atype]["count"] += 1
+        if sev in ("critical", "high", "medium"):
+            anomaly_summary[atype][sev] += 1
 
     return {
-        "total_gross_lakhs": round(df["gross"].sum() / 1e5, 1),
-        "total_net_lakhs": round(df["nett"].sum() / 1e5, 1),
-        "total_records": len(df),
+        "total_gross_lakhs": total_gross_lakhs,
         "by_category": by_category,
-        "by_fiscal_year": dict(sorted(by_fy.items(), reverse=True)),
-        "anomaly_summary": dict(anomaly_types),
+        "anomaly_summary": dict(anomaly_summary),
     }
 
 
-def generate_wards(df: pd.DataFrame, anomalies: list) -> dict:
-    """Per-ward aggregate data for the map."""
-    # Index anomalies by ward
-    anomaly_by_ward = defaultdict(list)
-    for a in anomalies:
-        w = a.get("ward_198")
-        if w is not None:
-            anomaly_by_ward[w].append(a)
+# ── 3. timeseries.json ────────────────────────────────────────────────────────
 
-    wards = {}
-    for ward, grp in df.groupby("ward_198"):
-        if pd.isna(ward):
+def build_timeseries(df):
+    if "order_date" not in df.columns and "start_date" not in df.columns:
+        return {}
+
+    date_col = "order_date" if "order_date" in df.columns else "start_date"
+    df = df.copy()
+    df["_fy"] = df[date_col].apply(_fiscal_year)
+
+    result = {}
+    for fy, grp in df.groupby("_fy"):
+        if fy == "unknown":
             continue
-        ward_key = str(int(ward))
-        ward_anomalies = anomaly_by_ward.get(int(ward), [])
-
-        # Ward name
-        ward_name = ""
-        if "ward_name" in grp.columns:
-            names = grp["ward_name"].dropna()
-            if len(names) > 0:
-                mode = names.mode()
-                ward_name = mode.iloc[0] if len(mode) > 0 else ""
-
-        # Zone
-        zone = ""
-        if "zone" in grp.columns:
-            zones = grp["zone"].dropna()
-            if len(zones) > 0:
-                mode = zones.mode()
-                zone = mode.iloc[0] if len(mode) > 0 else ""
-
-        # Top contractors
-        top = (
-            grp[grp["contractor"].str.len() > 0]
-            .groupby("contractor")
-            .agg(orders=("id", "size"), value=("gross", "sum"))
-            .sort_values("value", ascending=False)
-            .head(TOP_CONTRACTORS_PER_WARD)
-        )
-        top_contractors = [
-            {
-                "name": name,
-                "orders": int(row["orders"]),
-                "value_lakhs": round(row["value"] / 1e5, 1),
-            }
-            for name, row in top.iterrows()
-        ]
-
-        # Category breakdown
-        by_cat = grp["category"].value_counts().to_dict()
-
-        # Anomaly score: average severity of ward anomalies
-        avg_severity = 0
-        if ward_anomalies:
-            avg_severity = sum(a["severity"] for a in ward_anomalies) / len(ward_anomalies)
-
-        wards[ward_key] = {
-            "name": ward_name or f"Ward {ward_key}",
-            "zone": zone,
-            "total_orders": len(grp),
-            "total_gross_lakhs": round(grp["gross"].sum() / 1e5, 1),
+        by_cat = {}
+        if "category" in grp.columns:
+            for cat, cgrp in grp.groupby("category"):
+                by_cat[str(cat)] = _gross_lakhs(cgrp["gross"].sum()) if "gross" in cgrp.columns else 0
+        result[str(fy)] = {
+            "count": len(grp),
+            "gross_lakhs": _gross_lakhs(grp["gross"].sum()) if "gross" in grp.columns else 0,
             "by_category": by_cat,
-            "anomaly_count": len(ward_anomalies),
-            "anomaly_score": round(avg_severity, 3),
+        }
+    return result
+
+
+# ── 4. wards.json ─────────────────────────────────────────────────────────────
+
+def build_wards(df, anomalies, ward_names, ward_zones):
+    if "ward_198" not in df.columns:
+        logger.warning("ward_198 column missing — skipping wards.json")
+        return {}
+
+    # Anomaly counts and types per ward
+    ward_anomaly_count = defaultdict(int)
+    ward_anomaly_score = defaultdict(float)
+    ward_anomaly_types = defaultdict(set)
+    for a in anomalies:
+        w = str(a.get("ward_198", "")).strip()
+        if not w:
+            continue
+        ward_anomaly_count[w] += 1
+        ward_anomaly_score[w] = max(ward_anomaly_score[w], a.get("score", 0))
+        atype = a.get("anomaly_type", a.get("type", ""))
+        if atype:
+            ward_anomaly_types[w].add(atype)
+
+    result = {}
+    for ward_val, grp in df.groupby("ward_198"):
+        if pd.isna(ward_val):
+            continue
+        w = str(int(ward_val)) if float(ward_val) == int(float(ward_val)) else str(ward_val)
+
+        name = ward_names.get(w, grp["ward_name"].iloc[0] if "ward_name" in grp.columns else f"Ward {w}")
+        zone = ward_zones.get(w, "Unknown")
+
+        by_cat = {}
+        if "category" in grp.columns:
+            for cat, cgrp in grp.groupby("category"):
+                by_cat[str(cat)] = len(cgrp)
+
+        top_contractors = []
+        if "contractor" in grp.columns and "gross" in grp.columns:
+            con_grp = grp.dropna(subset=["contractor"])
+            con_stats = (
+                con_grp.groupby("contractor")
+                .agg(orders=("contractor", "count"), value=("gross", "sum"))
+                .sort_values("value", ascending=False)
+                .head(TOP_CONTRACTORS_PER_WARD)
+            )
+            for con, row in con_stats.iterrows():
+                top_contractors.append({
+                    "name": str(con),
+                    "orders": int(row["orders"]),
+                    "value_lakhs": _gross_lakhs(row["value"]),
+                })
+
+        result[w] = {
+            "ward_name": str(name),
+            "zone": str(zone),
+            "total_orders": len(grp),
+            "total_gross_lakhs": _gross_lakhs(grp["gross"].sum()) if "gross" in grp.columns else 0,
+            "avg_order_lakhs": _gross_lakhs(grp["gross"].mean()) if "gross" in grp.columns else 0,
+            "anomaly_count": ward_anomaly_count.get(w, 0),
+            "anomaly_score": round(ward_anomaly_score.get(w, 0.0), 3),
+            "category_breakdown": by_cat,
             "top_contractors": top_contractors,
+            "anomaly_types": sorted(ward_anomaly_types.get(w, set())),
         }
 
-    return wards
+    return result
 
 
-def generate_anomaly_feed(anomalies: list) -> list:
-    """Top anomalies sorted by severity for the feed."""
-    sorted_a = sorted(anomalies, key=lambda a: a["severity"], reverse=True)
+# ── 5. anomalies.json (feed) ──────────────────────────────────────────────────
+
+def build_anomalies_feed(anomalies):
     feed = []
-    for a in sorted_a[:ANOMALIES_FEED_LIMIT]:
+    sorted_anomalies = sorted(anomalies, key=lambda a: a.get("score", 0), reverse=True)
+    for a in sorted_anomalies[:ANOMALIES_FEED_LIMIT]:
         feed.append({
-            "id": hashlib.sha256(
-                json.dumps(a, sort_keys=True, default=str).encode()
-            ).hexdigest()[:12],
-            "type": a["anomaly_type"],
-            "severity": a["severity"],
-            "severity_label": a.get("severity_label", "low"),
-            "description": a["description"],
-            "ward_198": a.get("ward_198"),
-            "ward_name": a.get("ward_name", ""),
-            "contractor": a.get("contractor", ""),
-            "fiscal_year": a.get("fiscal_year", ""),
+            "id": a.get("anomaly_id", a.get("id", "")),
+            "type": a.get("anomaly_type", a.get("type", "")),
+            "severity": a.get("severity", ""),
+            "score": round(float(a.get("score", 0)), 3),
+            "ward_number": str(a.get("ward_198", "")),
+            "ward_name": str(a.get("ward_name", "")),
+            "category": str(a.get("category", "")),
+            "description": str(a.get("description", "")),
         })
     return feed
 
 
-def generate_contractors(df: pd.DataFrame, anomalies: list) -> dict:
-    """Contractor profiles with concentration and anomaly data."""
-    df_valid = df[df["contractor"].str.len() > 0]
+# ── 6. contractors.json ───────────────────────────────────────────────────────
 
-    # Index anomalies by contractor
-    anomaly_by_contractor = defaultdict(list)
-    for a in anomalies:
-        c = a.get("contractor", "")
-        if c:
-            anomaly_by_contractor[c].append(a)
+def build_contractors(df):
+    if "contractor" not in df.columns:
+        return []
 
-    contractor_stats = (
-        df_valid.groupby("contractor")
-        .agg(
-            total_orders=("id", "size"),
-            total_gross=("gross", "sum"),
-            wards=("ward_198", lambda x: sorted(x.dropna().unique().tolist())),
-            categories=("category", lambda x: x.value_counts().to_dict()),
-            fiscal_years=("fiscal_year", lambda x: sorted(x[x != ""].unique().tolist())),
-        )
-        .sort_values("total_gross", ascending=False)
-        .head(CONTRACTORS_LIMIT)
+    rows = []
+    con_df = df.dropna(subset=["contractor"])
+    for con, grp in con_df.groupby("contractor"):
+        wards = grp["ward_198"].dropna().nunique() if "ward_198" in grp.columns else 0
+        rows.append({
+            "contractor": str(con),
+            "gross_lakhs": _gross_lakhs(grp["gross"].sum()) if "gross" in grp.columns else 0,
+            "orders": len(grp),
+            "wards": int(wards),
+        })
+
+    rows.sort(key=lambda r: r["gross_lakhs"], reverse=True)
+    return rows[:CONTRACTORS_LIMIT]
+
+
+# ── 7. zones.json ─────────────────────────────────────────────────────────────
+
+def build_zones(df, anomalies, ward_zones):
+    if "ward_198" not in df.columns:
+        return []
+
+    # Map ward → zone in dataframe
+    df = df.copy()
+    df["_zone"] = df["ward_198"].apply(
+        lambda w: ward_zones.get(str(int(w)) if pd.notna(w) and float(w) == int(float(w)) else str(w), "Unknown")
+        if pd.notna(w) else "Unknown"
     )
 
-    contractors = {}
-    for name, row in contractor_stats.iterrows():
-        c_anomalies = anomaly_by_contractor.get(name, [])
-        contractors[name] = {
-            "name": name,
-            "total_orders": int(row["total_orders"]),
-            "total_gross_lakhs": round(row["total_gross"] / 1e5, 1),
-            "wards_active": [int(w) for w in row["wards"] if pd.notna(w)][:20],
-            "categories": row["categories"],
-            "fiscal_years": row["fiscal_years"],
-            "anomaly_count": len(c_anomalies),
-        }
+    # Anomaly counts per ward
+    ward_anomaly_count = defaultdict(int)
+    for a in anomalies:
+        w = str(a.get("ward_198", "")).strip()
+        if w:
+            ward_anomaly_count[w] += 1
 
-    return contractors
+    result = []
+    for zone, grp in df.groupby("_zone"):
+        ward_nums = set()
+        for w in grp["ward_198"].dropna():
+            try:
+                ward_nums.add(str(int(w)))
+            except (ValueError, TypeError):
+                ward_nums.add(str(w))
 
+        total_anomalies = sum(ward_anomaly_count.get(w, 0) for w in ward_nums)
+        result.append({
+            "zone": str(zone),
+            "ward_count": grp["ward_198"].nunique(),
+            "total_orders": len(grp),
+            "total_gross_lakhs": _gross_lakhs(grp["gross"].sum()) if "gross" in grp.columns else 0,
+            "total_anomalies": total_anomalies,
+        })
 
-def generate_timeseries(df: pd.DataFrame) -> dict:
-    """Monthly and yearly spending time series."""
-    yearly = {}
-    for fy, grp in df.groupby("fiscal_year"):
-        if not fy:
-            continue
-        by_cat = {}
-        for cat, cat_grp in grp.groupby("category"):
-            by_cat[cat] = round(cat_grp["gross"].sum() / 1e5, 1)
-        yearly[fy] = {
-            "total_lakhs": round(grp["gross"].sum() / 1e5, 1),
-            "count": len(grp),
-            "by_category": by_cat,
-        }
-
-    return {"yearly": dict(sorted(yearly.items()))}
+    result.sort(key=lambda r: r["total_gross_lakhs"], reverse=True)
+    return result
 
 
-def write_json(data, filename: str):
-    """Write JSON file to site directory."""
+# ── 8. insights.json ──────────────────────────────────────────────────────────
+
+def build_insights(df, anomalies, ward_names):
+    insights = []
+
+    # 1. Largest single order
+    if "gross" in df.columns and "name_of_work" in df.columns:
+        idx = df["gross"].idxmax()
+        if pd.notna(idx):
+            row = df.loc[idx]
+            ward_w = str(int(row["ward_198"])) if "ward_198" in df.columns and pd.notna(row.get("ward_198")) else ""
+            wname = ward_names.get(ward_w, row.get("ward_name", ""))
+            insights.append({
+                "type": "largest_order",
+                "label": "Largest Single Order",
+                "value": f"Rs {_gross_lakhs(row['gross']):.1f}L",
+                "detail": f"{str(row.get('name_of_work', ''))[:80]} — {wname}",
+            })
+
+    # 2. Top contractor by spend
+    if "contractor" in df.columns and "gross" in df.columns:
+        con_totals = df.dropna(subset=["contractor"]).groupby("contractor")["gross"].sum()
+        if not con_totals.empty:
+            top_con = con_totals.idxmax()
+            insights.append({
+                "type": "top_contractor",
+                "label": "Top Contractor by Spend",
+                "value": f"Rs {_gross_lakhs(con_totals[top_con]):.1f}L",
+                "detail": str(top_con),
+            })
+
+    # 3. Most flagged ward
+    if anomalies and "ward_198" in df.columns:
+        ward_counts = defaultdict(int)
+        for a in anomalies:
+            w = str(a.get("ward_198", "")).strip()
+            if w:
+                ward_counts[w] += 1
+        if ward_counts:
+            top_ward = max(ward_counts, key=ward_counts.get)
+            wname = ward_names.get(top_ward, f"Ward {top_ward}")
+            insights.append({
+                "type": "most_flagged_ward",
+                "label": "Most Flagged Ward",
+                "value": f"{ward_counts[top_ward]} anomalies",
+                "detail": wname,
+            })
+
+    # 4. Highest spend ward
+    if "ward_198" in df.columns and "gross" in df.columns:
+        ward_spend = df.dropna(subset=["ward_198"]).groupby("ward_198")["gross"].sum()
+        if not ward_spend.empty:
+            top_w = ward_spend.idxmax()
+            wkey = str(int(top_w)) if float(top_w) == int(float(top_w)) else str(top_w)
+            wname = ward_names.get(wkey, f"Ward {wkey}")
+            insights.append({
+                "type": "highest_spend_ward",
+                "label": "Highest Spend Ward",
+                "value": f"Rs {_gross_lakhs(ward_spend[top_w]):.1f}L",
+                "detail": wname,
+            })
+
+    # 5. Largest category by spend
+    if "category" in df.columns and "gross" in df.columns:
+        cat_spend = df.dropna(subset=["category"]).groupby("category")["gross"].sum()
+        if not cat_spend.empty:
+            top_cat = cat_spend.idxmax()
+            insights.append({
+                "type": "largest_category",
+                "label": "Largest Spending Category",
+                "value": f"Rs {_gross_lakhs(cat_spend[top_cat]):.1f}L",
+                "detail": str(top_cat).capitalize(),
+            })
+
+    # 6. Duplicate value anomalies
+    dup_count = sum(
+        1 for a in anomalies
+        if a.get("anomaly_type", a.get("type", "")) in ("duplicate_work", "split_order")
+    )
+    if dup_count > 0:
+        insights.append({
+            "type": "duplicate_value",
+            "label": "Duplicate / Split Orders",
+            "value": f"{dup_count} flagged",
+            "detail": "Orders with similar descriptions or suspicious amount splits",
+        })
+
+    return insights[:6]
+
+
+# ── Main ──────────────────────────────────────────────────────────────────────
+
+def save_json(data, filename):
+    os.makedirs(SITE_DIR, exist_ok=True)
     path = os.path.join(SITE_DIR, filename)
     with open(path, "w") as f:
-        json.dump(data, f, indent=None, default=str)
-    size_kb = os.path.getsize(path) / 1024
-    logger.info(f"  {filename}: {size_kb:.1f} KB")
+        json.dump(data, f, separators=(",", ":"), default=str)
+    logger.info(f"Saved {filename} ({os.path.getsize(path):,} bytes)")
 
 
 def main():
-    """Generate all site JSON files."""
     df, anomalies = load_data()
-    logger.info(f"Loaded {len(df)} work orders, {len(anomalies)} anomalies")
+    ward_names, ward_zones = load_ward_mapping()
 
-    os.makedirs(SITE_DIR, exist_ok=True)
+    save_json(build_meta(df, anomalies), "meta.json")
+    save_json(build_summary(df, anomalies), "summary.json")
+    save_json(build_timeseries(df), "timeseries.json")
+    save_json(build_wards(df, anomalies, ward_names, ward_zones), "wards.json")
+    save_json(build_anomalies_feed(anomalies), "anomalies.json")
+    save_json(build_contractors(df), "contractors.json")
+    save_json(build_zones(df, anomalies, ward_zones), "zones.json")
+    save_json(build_insights(df, anomalies, ward_names), "insights.json")
 
-    logger.info("Generating site data:")
-    write_json(generate_meta(df, anomalies), "meta.json")
-    write_json(generate_summary(df, anomalies), "summary.json")
-    write_json(generate_wards(df, anomalies), "wards.json")
-    write_json(generate_anomaly_feed(anomalies), "anomalies.json")
-    write_json(generate_contractors(df, anomalies), "contractors.json")
-    write_json(generate_timeseries(df), "timeseries.json")
-
-    logger.info("Site data generation complete")
+    logger.info("All 8 site JSON files generated.")
 
 
 if __name__ == "__main__":
