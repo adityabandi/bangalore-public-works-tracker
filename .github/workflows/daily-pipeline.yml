@@ -35,23 +35,18 @@ jobs:
           echo "changed=$(python -c "import json; print(str(json.load(open('data/fetch_status.json'))['changed']).lower())")" >> $GITHUB_OUTPUT
 
       - name: Normalize data
-        if: steps.fetch.outputs.changed == 'true'
         run: python scripts/normalize.py
 
       - name: Detect anomalies
-        if: steps.fetch.outputs.changed == 'true'
         run: python scripts/detect_anomalies.py
 
       - name: Generate site data
-        if: steps.fetch.outputs.changed == 'true'
         run: python scripts/generate_site_data.py
 
       - name: Copy site data to docs
-        if: steps.fetch.outputs.changed == 'true'
         run: cp data/site/*.json docs/data/
 
       - name: Commit and push
-        if: steps.fetch.outputs.changed == 'true'
         run: |
           git config user.name "BBMP Tracker Bot"
           git config user.email "bot@bbmp-tracker.github.io"
