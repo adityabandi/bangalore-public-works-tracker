@@ -49,6 +49,7 @@ async function boot() {
         if (typeof initMap === 'function') initMap();
         if (typeof initCharts === 'function') initCharts();
         if (typeof initAnomalies === 'function') initAnomalies();
+        if (typeof initContractors === 'function') initContractors();
     } catch (e) {
         console.error('Boot error:', e);
     } finally {

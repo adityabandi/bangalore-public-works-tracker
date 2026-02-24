@@ -133,6 +133,6 @@ BENFORD_CHI_SQUARED_THRESHOLD = 15.51  # 8 df, 0.05 significance
 BENFORD_MIN_SAMPLE = 100              # Need >= N records per ward
 
 # Output limits
-ANOMALIES_FEED_LIMIT = 500          # Top N anomalies in the feed
-CONTRACTORS_LIMIT = 200             # Top N contractors in output
+ANOMALIES_FEED_LIMIT = 999999       # All anomalies (gzipped ~250KB — fine for static site)
+CONTRACTORS_LIMIT = 999999          # All contractors (gzipped ~195KB — fine for static site)
 TOP_CONTRACTORS_PER_WARD = 5        # Top N contractors per ward

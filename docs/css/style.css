@@ -677,6 +677,77 @@ footer {
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* ===== Contractors Tab ===== */
+.contractor-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+    flex-wrap: wrap;
+}
+.contractor-stats-chips {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    flex: 1;
+}
+
+.contractor-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8rem;
+}
+.contractor-table th {
+    background: var(--bg-card);
+    padding: 0.6rem 0.75rem;
+    text-align: left;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+.contractor-table th.sortable {
+    cursor: pointer;
+    user-select: none;
+}
+.contractor-table th.sortable:hover { color: var(--text-primary); }
+.contractor-table th.sorted-asc .sort-icon,
+.contractor-table th.sorted-desc .sort-icon { color: var(--primary); }
+.sort-icon { font-style: normal; margin-left: 0.25rem; }
+
+.contractor-table td {
+    padding: 0.55rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+}
+.contractor-table tr:hover td { background: var(--bg-hover); }
+.contractor-table tr:last-child td { border-bottom: none; }
+
+.col-rank  { width: 3rem; color: var(--text-muted); }
+.col-name  { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.col-spend { width: 110px; font-weight: 600; color: var(--text-primary); }
+.col-orders, .col-wards { width: 80px; }
+.col-bar   { width: 140px; }
+
+.con-bar-wrap {
+    height: 6px;
+    background: var(--bg-body);
+    border-radius: 3px;
+    overflow: hidden;
+}
+.con-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #3b82f6, #5b8def);
+    border-radius: 3px;
+    min-width: 1px;
+}
+
 /* ===== Responsive ===== */
 @media (max-width: 1024px) {
     .map-layout { grid-template-columns: 1fr; height: auto; }

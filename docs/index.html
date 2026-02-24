@@ -33,6 +33,7 @@
                 <button class="nav-tab" data-tab="map" onclick="switchTab('map')">Ward Map</button>
                 <button class="nav-tab" data-tab="anomalies" onclick="switchTab('anomalies')">Anomalies</button>
                 <button class="nav-tab" data-tab="analytics" onclick="switchTab('analytics')">Analytics</button>
+                <button class="nav-tab" data-tab="contractors" onclick="switchTab('contractors')">Contractors</button>
             </div>
             <div class="nav-meta">
                 <span id="nav-updated" class="nav-updated"></span>
@@ -234,6 +235,41 @@
         </section>
     </main>
 
+        <!-- ====== CONTRACTORS TAB ====== -->
+        <section class="tab-content" id="tab-contractors">
+            <div class="section-header">
+                <h2>Contractors</h2>
+                <p class="section-sub">All contractors ranked by total spend across BBMP work orders</p>
+            </div>
+
+            <!-- Stats + Search row -->
+            <div class="contractor-toolbar">
+                <div class="contractor-stats-chips" id="contractor-stats"></div>
+                <input type="text" id="contractor-search" placeholder="Search contractor name…" class="search-input">
+            </div>
+
+            <p id="contractor-showing" style="font-size:0.75rem;color:var(--text-muted);margin-bottom:0.5rem;"></p>
+
+            <div class="card">
+                <div class="card-body" style="overflow-x:auto;padding:0;">
+                    <table class="contractor-table" id="contractor-table">
+                        <thead>
+                            <tr>
+                                <th class="col-rank">#</th>
+                                <th class="col-name sortable" data-col="contractor">Contractor <span class="sort-icon">↕</span></th>
+                                <th class="col-spend sortable sorted-desc" data-col="gross_lakhs">Spend (₹) <span class="sort-icon">↓</span></th>
+                                <th class="col-orders sortable" data-col="orders">Orders <span class="sort-icon">↕</span></th>
+                                <th class="col-wards sortable" data-col="wards">Wards <span class="sort-icon">↕</span></th>
+                                <th class="col-bar">Spend Share</th>
+                            </tr>
+                        </thead>
+                        <tbody id="contractor-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+            <button id="contractor-load-more" class="btn-secondary hidden" onclick="contractorLoadMore()">Load More</button>
+        </section>
+
     <!-- Footer -->
     <footer>
         <div class="footer-inner">
@@ -252,5 +288,6 @@
     <script src="js/map.js"></script>
     <script src="js/charts.js"></script>
     <script src="js/anomalies.js"></script>
+    <script src="js/contractors.js"></script>
 </body>
 </html>
