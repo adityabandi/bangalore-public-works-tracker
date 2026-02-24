@@ -18,7 +18,7 @@ function initBids() {
     bidConFiltered = [...pricing];
 
     renderBidStats(cats, outliers, pricing);
-    renderCategoryChart(cats);
+    renderBidCategoryChart(cats);
     renderOutlierTable(true);
     renderConPricingTable(true);
     wireBidControls();
@@ -43,7 +43,7 @@ function renderBidStats(cats, outliers, pricing) {
     `;
 }
 
-function renderCategoryChart(cats) {
+function renderBidCategoryChart(cats) {
     const ctx = document.getElementById('bid-category-chart');
     if (!ctx || !cats.length) return;
 
