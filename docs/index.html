@@ -1,11 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bangalore Public Works Tracker</title>
-    <meta name="description" content="Automated anomaly detection in BBMP public works spending across 198 wards. Track contractor concentration, cost overruns, and suspicious patterns.">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏗</text></svg>">
+    <meta name="description"
+        content="Automated anomaly detection in BBMP public works spending across 198 wards. Track contractor concentration, cost overruns, and suspicious patterns.">
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏗</text></svg>">
 
     <!-- Leaflet -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
@@ -16,10 +19,13 @@
 
     <!-- Inter font -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
 
     <link rel="stylesheet" href="css/style.css">
 </head>
+
 <body>
     <!-- Top Navigation -->
     <nav id="nav">
@@ -34,7 +40,8 @@
                 <button class="nav-tab" data-tab="anomalies" onclick="switchTab('anomalies')">Anomalies</button>
                 <button class="nav-tab" data-tab="analytics" onclick="switchTab('analytics')">Analytics</button>
                 <button class="nav-tab" data-tab="contractors" onclick="switchTab('contractors')">Contractors</button>
-                <button class="nav-tab" data-tab="repeat-works" onclick="switchTab('repeat-works')">Repeat Works</button>
+                <button class="nav-tab" data-tab="repeat-works" onclick="switchTab('repeat-works')">Repeat
+                    Works</button>
                 <button class="nav-tab" data-tab="bids" onclick="switchTab('bids')">Bid Analysis</button>
             </div>
             <div class="nav-meta">
@@ -137,7 +144,8 @@
             <div class="map-layout">
                 <div class="map-main">
                     <div class="map-toolbar">
-                        <input type="text" id="ward-search" placeholder="Search ward by name or number..." class="search-input">
+                        <input type="text" id="ward-search" placeholder="Search ward by name or number..."
+                            class="search-input">
                         <select id="map-metric" class="select-input">
                             <option value="anomaly_score">Anomaly Score</option>
                             <option value="total_gross_lakhs">Total Spend</option>
@@ -187,7 +195,8 @@
                     <option value="medium">Medium</option>
                     <option value="low">Low</option>
                 </select>
-                <input type="text" id="filter-search" placeholder="Search wards, contractors..." class="search-input flex-grow">
+                <input type="text" id="filter-search" placeholder="Search wards, contractors..."
+                    class="search-input flex-grow">
             </div>
 
             <p id="anomaly-showing" style="font-size:0.75rem;color:var(--text-muted);margin-bottom:0.5rem;"></p>
@@ -237,7 +246,6 @@
                 </div>
             </div>
         </section>
-    </main>
 
         <!-- ====== CONTRACTORS TAB ====== -->
         <section class="tab-content" id="tab-contractors">
@@ -260,12 +268,18 @@
                         <thead>
                             <tr>
                                 <th class="col-rank">#</th>
-                                <th class="col-name sortable" data-col="contractor">Contractor <span class="sort-icon">↕</span></th>
-                                <th class="col-spend sortable sorted-desc" data-col="gross_lakhs">Spend (₹) <span class="sort-icon">↓</span></th>
-                                <th class="col-orders sortable" data-col="orders">Orders <span class="sort-icon">↕</span></th>
-                                <th class="col-wards sortable" data-col="wards">Wards <span class="sort-icon">↕</span></th>
-                                <th class="col-anom sortable" data-col="anomaly_count">Flags <span class="sort-icon">↕</span></th>
-                                <th class="col-risk sortable" data-col="risk_score">Risk <span class="sort-icon">↕</span></th>
+                                <th class="col-name sortable" data-col="contractor">Contractor <span
+                                        class="sort-icon">↕</span></th>
+                                <th class="col-spend sortable sorted-desc" data-col="gross_lakhs">Spend (₹) <span
+                                        class="sort-icon">↓</span></th>
+                                <th class="col-orders sortable" data-col="orders">Orders <span
+                                        class="sort-icon">↕</span></th>
+                                <th class="col-wards sortable" data-col="wards">Wards <span class="sort-icon">↕</span>
+                                </th>
+                                <th class="col-anom sortable" data-col="anomaly_count">Flags <span
+                                        class="sort-icon">↕</span></th>
+                                <th class="col-risk sortable" data-col="risk_score">Risk <span
+                                        class="sort-icon">↕</span></th>
                                 <th class="col-bar">Spend Share</th>
                             </tr>
                         </thead>
@@ -273,19 +287,22 @@
                     </table>
                 </div>
             </div>
-            <button id="contractor-load-more" class="btn-secondary hidden" onclick="contractorLoadMore()">Load More</button>
+            <button id="contractor-load-more" class="btn-secondary hidden" onclick="contractorLoadMore()">Load
+                More</button>
         </section>
 
         <!-- ====== REPEAT WORKS TAB ====== -->
         <section id="tab-repeat-works" class="tab-content" style="display:none;">
             <div class="section-header">
                 <h2>🔁 Repeat Works</h2>
-                <p class="section-sub">Locations that keep receiving budget year after year — possible quality or maintenance issues</p>
+                <p class="section-sub">Locations that keep receiving budget year after year — possible quality or
+                    maintenance issues</p>
             </div>
 
             <div class="contractor-toolbar">
                 <div class="contractor-stats-chips" id="rw-stats"></div>
-                <input type="text" id="rw-search" placeholder="Search location, ward, or category…" class="search-input">
+                <input type="text" id="rw-search" placeholder="Search location, ward, or category…"
+                    class="search-input">
             </div>
 
             <div class="card rw-chart-card">
@@ -322,12 +339,14 @@
         <section id="tab-bids" class="tab-content" style="display:none;">
             <div class="section-header">
                 <h2>📊 Bid Analysis</h2>
-                <p class="section-sub">Cost comparison against SoR benchmarks and ward medians — flagging overpriced orders</p>
+                <p class="section-sub">Cost comparison against SoR benchmarks and ward medians — flagging overpriced
+                    orders</p>
             </div>
 
             <div class="contractor-toolbar">
                 <div class="contractor-stats-chips" id="bid-stats"></div>
-                <input type="text" id="bid-search" placeholder="Search ward, category, or contractor…" class="search-input">
+                <input type="text" id="bid-search" placeholder="Search ward, category, or contractor…"
+                    class="search-input">
             </div>
 
             <div class="card">
@@ -377,17 +396,20 @@
             </div>
             <button id="bid-con-more" class="btn-secondary">Load More</button>
         </section>
+    </main>
 
     <!-- Footer -->
     <footer>
         <div class="footer-inner">
             <p>
                 Data from <a href="https://data.opencity.in" target="_blank">OpenCity.in</a> •
-                Boundaries from <a href="https://github.com/datameet/Municipal_Spatial_Data" target="_blank">DataMeet</a> •
+                Boundaries from <a href="https://github.com/datameet/Municipal_Spatial_Data"
+                    target="_blank">DataMeet</a> •
                 <a href="https://github.com/adityabandi/bangalore-public-works-tracker" target="_blank">Source Code</a>
             </p>
             <p class="disclaimer">
-                This tool flags statistical anomalies for further investigation. Flagged items are not accusations of wrongdoing.
+                This tool flags statistical anomalies for further investigation. Flagged items are not accusations of
+                wrongdoing.
             </p>
         </div>
     </footer>
@@ -400,4 +422,5 @@
     <script src="js/repeat_works.js"></script>
     <script src="js/bids.js"></script>
 </body>
+
 </html>
