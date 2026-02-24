@@ -154,7 +154,7 @@ function showWardDetail(wardNo) {
     const cats = w.category_breakdown || {};
     const topCats = Object.entries(cats).sort((a,b) => b[1]-a[1]).slice(0, 6);
     const contractors = w.top_contractors || [];
-    const anomalyTypes = w.anomaly_types || {};
+    const anomalyTypes = Array.isArray(w.anomaly_types) ? w.anomaly_types : [];
 
     panel.innerHTML = `
         <div class="ward-detail-header">
@@ -189,14 +189,14 @@ function showWardDetail(wardNo) {
         <div class="ward-section">
             <h4>Top Contractors</h4>
             ${contractors.slice(0,5).map(c => `
-                <div class="ward-row"><span>${esc(c.contractor)}</span><span>${fmtL(c.gross_lakhs)}</span></div>
+                <div class="ward-row"><span>${esc(c.name)}</span><span>${fmtL(c.value_lakhs)}</span></div>
             `).join('')}
         </div>` : ''}
-        ${Object.keys(anomalyTypes).length ? `
+        ${anomalyTypes.length ? `
         <div class="ward-section">
             <h4>Anomaly Types</h4>
-            ${Object.entries(anomalyTypes).map(([t,n]) => `
-                <div class="ward-row"><span>${esc(t.replace(/_/g,' '))}</span><span>${n}</span></div>
+            ${anomalyTypes.map(t => `
+                <div class="ward-row"><span>${esc(t.replace(/_/g,' '))}</span></div>
             `).join('')}
         </div>` : ''}`;
 }

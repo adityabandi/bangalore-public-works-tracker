@@ -60,7 +60,7 @@ async function boot() {
 function renderNav() {
     const m = DATA.meta || {};
     const el = document.getElementById('nav-updated');
-    if (el) el.textContent = m.generated ? fmtDate(m.generated) : '';
+    if (el) el.textContent = m.generated_at ? fmtDate(m.generated_at) : '';
 }
 
 function switchTab(name) {

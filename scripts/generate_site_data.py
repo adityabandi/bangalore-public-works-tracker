@@ -73,11 +73,26 @@ def _fiscal_year(date_val):
     """Return 'YYYY-YY' fiscal year string from a date value."""
     try:
         dt = pd.to_datetime(date_val)
+        if pd.isna(dt):
+            return "unknown"
         if dt.month >= 4:
             return f"{dt.year}-{str(dt.year + 1)[2:]}"
         return f"{dt.year - 1}-{str(dt.year)[2:]}"
     except Exception:
         return "unknown"
+
+
+def _norm_ward(w):
+    """Normalize ward key: '1.0' → '1', '2' → '2'."""
+    if w is None or w == "" or (isinstance(w, float) and pd.isna(w)):
+        return ""
+    w = str(w).strip()
+    if not w or w.lower() in ("none", "nan"):
+        return ""
+    try:
+        return str(int(float(w)))
+    except (ValueError, TypeError):
+        return w
 
 
 # ── 1. meta.json ─────────────────────────────────────────────────────────────
@@ -139,7 +154,7 @@ def build_timeseries(df):
 
     result = {}
     for fy, grp in df.groupby("_fy"):
-        if fy == "unknown":
+        if fy == "unknown" or str(fy).startswith("nan"):
             continue
         by_cat = {}
         if "category" in grp.columns:
@@ -165,7 +180,7 @@ def build_wards(df, anomalies, ward_names, ward_zones):
     ward_anomaly_score = defaultdict(float)
     ward_anomaly_types = defaultdict(set)
     for a in anomalies:
-        w = str(a.get("ward_198", "")).strip()
+        w = _norm_ward(a.get("ward_198", ""))
         if not w:
             continue
         ward_anomaly_count[w] += 1
@@ -178,7 +193,7 @@ def build_wards(df, anomalies, ward_names, ward_zones):
     for ward_val, grp in df.groupby("ward_198"):
         if pd.isna(ward_val):
             continue
-        w = str(int(ward_val)) if float(ward_val) == int(float(ward_val)) else str(ward_val)
+        w = _norm_ward(ward_val)
 
         name = ward_names.get(w, grp["ward_name"].iloc[0] if "ward_name" in grp.columns else f"Ward {w}")
         zone = ward_zones.get(w, "Unknown")
@@ -231,7 +246,7 @@ def build_anomalies_feed(anomalies):
             "type": a.get("anomaly_type", a.get("type", "")),
             "severity": a.get("severity", ""),
             "score": round(float(a.get("score", 0)), 3),
-            "ward_number": str(a.get("ward_198", "")),
+            "ward_number": _norm_ward(a.get("ward_198", "")),
             "ward_name": str(a.get("ward_name", "")),
             "category": str(a.get("category", "")),
             "description": str(a.get("description", "")),
@@ -276,7 +291,7 @@ def build_zones(df, anomalies, ward_zones):
     # Anomaly counts per ward
     ward_anomaly_count = defaultdict(int)
     for a in anomalies:
-        w = str(a.get("ward_198", "")).strip()
+        w = _norm_ward(a.get("ward_198", ""))
         if w:
             ward_anomaly_count[w] += 1
 
@@ -337,7 +352,7 @@ def build_insights(df, anomalies, ward_names):
     if anomalies and "ward_198" in df.columns:
         ward_counts = defaultdict(int)
         for a in anomalies:
-            w = str(a.get("ward_198", "")).strip()
+            w = _norm_ward(a.get("ward_198", ""))
             if w:
                 ward_counts[w] += 1
         if ward_counts:
