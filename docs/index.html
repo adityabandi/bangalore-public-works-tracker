@@ -34,6 +34,8 @@
                 <button class="nav-tab" data-tab="anomalies" onclick="switchTab('anomalies')">Anomalies</button>
                 <button class="nav-tab" data-tab="analytics" onclick="switchTab('analytics')">Analytics</button>
                 <button class="nav-tab" data-tab="contractors" onclick="switchTab('contractors')">Contractors</button>
+                <button class="nav-tab" data-tab="repeat-works" onclick="switchTab('repeat-works')">Repeat Works</button>
+                <button class="nav-tab" data-tab="bids" onclick="switchTab('bids')">Bid Analysis</button>
             </div>
             <div class="nav-meta">
                 <span id="nav-updated" class="nav-updated"></span>
@@ -175,6 +177,8 @@
                     <option value="benford_violation">Benford Violations</option>
                     <option value="split_order">Split Orders</option>
                     <option value="repeat_contractor">Repeat Contractors</option>
+                    <option value="repeat_work">Repeat Works</option>
+                    <option value="bid_anomaly">Bid Anomalies</option>
                 </select>
                 <select id="filter-severity" class="select-input">
                     <option value="all">All Severity</option>
@@ -260,6 +264,8 @@
                                 <th class="col-spend sortable sorted-desc" data-col="gross_lakhs">Spend (₹) <span class="sort-icon">↓</span></th>
                                 <th class="col-orders sortable" data-col="orders">Orders <span class="sort-icon">↕</span></th>
                                 <th class="col-wards sortable" data-col="wards">Wards <span class="sort-icon">↕</span></th>
+                                <th class="col-anom sortable" data-col="anomaly_count">Flags <span class="sort-icon">↕</span></th>
+                                <th class="col-risk sortable" data-col="risk_score">Risk <span class="sort-icon">↕</span></th>
                                 <th class="col-bar">Spend Share</th>
                             </tr>
                         </thead>
@@ -268,6 +274,108 @@
                 </div>
             </div>
             <button id="contractor-load-more" class="btn-secondary hidden" onclick="contractorLoadMore()">Load More</button>
+        </section>
+
+        <!-- ====== REPEAT WORKS TAB ====== -->
+        <section id="tab-repeat-works" class="tab-content" style="display:none;">
+            <div class="section-header">
+                <h2>🔁 Repeat Works</h2>
+                <p class="section-sub">Locations that keep receiving budget year after year — possible quality or maintenance issues</p>
+            </div>
+
+            <div class="contractor-toolbar">
+                <div class="contractor-stats-chips" id="rw-stats"></div>
+                <input type="text" id="rw-search" placeholder="Search location, ward, or category…" class="search-input">
+            </div>
+
+            <div class="card rw-chart-card">
+                <div class="card-body" style="height:500px;">
+                    <canvas id="rw-chart"></canvas>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-body" style="overflow-x:auto;padding:0;">
+                    <table class="contractor-table" id="rw-table">
+                        <thead>
+                            <tr>
+                                <th data-sort="description_sample" style="min-width:240px;">Work Description</th>
+                                <th data-sort="ward_name">Ward</th>
+                                <th data-sort="category">Category</th>
+                                <th data-sort="dominant_contractor">Top Contractor</th>
+                                <th data-sort="same_contractor_pct" class="num">Conc %</th>
+                                <th data-sort="fy_count" class="num">FY Count ↓</th>
+                                <th data-sort="order_count" class="num">Orders</th>
+                                <th data-sort="total_spend_lakhs" class="num">Total Spend</th>
+                                <th data-sort="avg_order_lakhs" class="num">Avg Order</th>
+                                <th>Fiscal Years</th>
+                            </tr>
+                        </thead>
+                        <tbody id="rw-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+            <button id="rw-more" class="btn-secondary">Load More</button>
+        </section>
+
+        <!-- ====== BID ANALYSIS TAB ====== -->
+        <section id="tab-bids" class="tab-content" style="display:none;">
+            <div class="section-header">
+                <h2>📊 Bid Analysis</h2>
+                <p class="section-sub">Cost comparison against SoR benchmarks and ward medians — flagging overpriced orders</p>
+            </div>
+
+            <div class="contractor-toolbar">
+                <div class="contractor-stats-chips" id="bid-stats"></div>
+                <input type="text" id="bid-search" placeholder="Search ward, category, or contractor…" class="search-input">
+            </div>
+
+            <div class="card">
+                <div class="card-body" style="height:340px;">
+                    <canvas id="bid-category-chart"></canvas>
+                </div>
+            </div>
+
+            <h3 class="sub-section-title">Above-Benchmark Orders</h3>
+            <div class="card">
+                <div class="card-body" style="overflow-x:auto;padding:0;">
+                    <table class="contractor-table" id="bid-outlier-table">
+                        <thead>
+                            <tr>
+                                <th>Ward</th>
+                                <th>Category</th>
+                                <th class="num">Amount</th>
+                                <th class="num">Ward Median</th>
+                                <th class="num">Ratio</th>
+                                <th>Contractor</th>
+                            </tr>
+                        </thead>
+                        <tbody id="bid-outlier-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+            <button id="bid-outlier-more" class="btn-secondary">Load More</button>
+
+            <h3 class="sub-section-title">Contractor Pricing Comparison</h3>
+            <div class="card">
+                <div class="card-body" style="overflow-x:auto;padding:0;">
+                    <table class="contractor-table" id="bid-con-table">
+                        <thead>
+                            <tr>
+                                <th>Contractor</th>
+                                <th>Category</th>
+                                <th class="num">Avg Order</th>
+                                <th class="num">Category Median</th>
+                                <th class="num">Ratio</th>
+                                <th class="num">Orders</th>
+                                <th class="num">Total Spend</th>
+                            </tr>
+                        </thead>
+                        <tbody id="bid-con-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+            <button id="bid-con-more" class="btn-secondary">Load More</button>
         </section>
 
     <!-- Footer -->
@@ -289,5 +397,7 @@
     <script src="js/charts.js"></script>
     <script src="js/anomalies.js"></script>
     <script src="js/contractors.js"></script>
+    <script src="js/repeat_works.js"></script>
+    <script src="js/bids.js"></script>
 </body>
 </html>

@@ -59,12 +59,18 @@ function renderContractorTable(reset) {
     const rows = slice.map((c, i) => {
         const rank = startRank + i + 1;
         const pct = maxSpend > 0 ? Math.min(100, (c.gross_lakhs || 0) / maxSpend * 100) : 0;
-        return `<tr>
+        const risk = c.risk_score || 0;
+        const riskClass = risk >= 0.6 ? 'critical' : risk >= 0.3 ? 'high' : risk >= 0.1 ? 'medium' : 'low';
+        const riskLabel = risk >= 0.6 ? 'High' : risk >= 0.3 ? 'Med' : risk >= 0.1 ? 'Low' : '—';
+        const anomCount = (c.anomaly_count || 0) + (c.repeat_work_count || 0) + (c.bid_outlier_count || 0);
+        return `<tr class="${risk >= 0.6 ? 'row-high-risk' : ''}">
             <td class="col-rank mono">${rank}</td>
             <td class="col-name">${esc(c.contractor)}</td>
             <td class="col-spend mono">₹${fmtL(c.gross_lakhs || 0)}</td>
             <td class="col-orders mono">${(c.orders || 0).toLocaleString()}</td>
             <td class="col-wards mono">${c.wards || 0}</td>
+            <td class="col-anom mono">${anomCount > 0 ? anomCount : '—'}</td>
+            <td class="col-risk"><span class="risk-badge risk-${riskClass}">${riskLabel}</span></td>
             <td class="col-bar"><div class="con-bar-wrap"><div class="con-bar" style="width:${pct.toFixed(1)}%"></div></div></td>
         </tr>`;
     }).join('');

@@ -132,6 +132,14 @@ DEDUCTION_MIN_GROUP = 20            # Need >= N records for analysis
 BENFORD_CHI_SQUARED_THRESHOLD = 15.51  # 8 df, 0.05 significance
 BENFORD_MIN_SAMPLE = 100              # Need >= N records per ward
 
+REPEAT_WORK_MIN_OCCURRENCES = 3       # Flag locations with >= N similar works across FYs
+REPEAT_WORK_SIMILARITY = 0.75         # Jaccard threshold for matching descriptions
+REPEAT_WORK_MIN_AMOUNT = 100000       # Ignore amounts < 1 lakh INR
+
+BID_BENCHMARK_FACTOR = 2.0            # Flag if amount > factor × ward-category median
+BID_MIN_GROUP_SIZE = 5                # Need >= N records in ward-category group
+BID_MIN_AMOUNT = 500000               # Ignore amounts < 5 lakh INR
+
 # Output limits
 ANOMALIES_FEED_LIMIT = 999999       # All anomalies (gzipped ~250KB — fine for static site)
 CONTRACTORS_LIMIT = 999999          # All contractors (gzipped ~195KB — fine for static site)

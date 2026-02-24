@@ -7,19 +7,17 @@ let filteredAnomalies = [];
 let displayedCount = 0;
 
 const TYPE_META = {
-    cost_outlier:              { icon: '💰', color: '#f59e0b' },
-    potential_duplicate:       { icon: '📋', color: '#f04444' },
-    duplicate_work:            { icon: '📋', color: '#f04444' },
-    unusual_timing:            { icon: '🕐', color: '#a78bfa' },
-    payment_speed:             { icon: '🕐', color: '#a78bfa' },
-    round_number:              { icon: '🔢', color: '#06b6d4' },
-    contractor_concentration:  { icon: '📍', color: '#ec4899' },
-    high_ward_concentration:   { icon: '📍', color: '#ec4899' },
-    price_benchmark:           { icon: '📊', color: '#f97316' },
-    deduction_ratio:           { icon: '📊', color: '#f97316' },
-    benford_violation:         { icon: '🔢', color: '#06b6d4' },
-    split_order:               { icon: '✂️', color: '#84cc16' },
-    repeat_contractor:         { icon: '🔄', color: '#14b8a6' }
+    cost_outlier: { icon: '💰', color: '#f59e0b' },
+    potential_duplicate: { icon: '📋', color: '#f04444' },
+    duplicate_work: { icon: '📋', color: '#f04444' },
+    contractor_concentration: { icon: '🏢', color: '#a78bfa' },
+    payment_speed: { icon: '⚡', color: '#22c55e' },
+    deduction_ratio: { icon: '📉', color: '#ec4899' },
+    benford_violation: { icon: '🔢', color: '#06b6d4' },
+    split_order: { icon: '✂️', color: '#f97316' },
+    repeat_contractor: { icon: '🔄', color: '#84cc16' },
+    repeat_work: { icon: '🔁', color: '#fb923c' },
+    bid_anomaly: { icon: '📊', color: '#e879f9' },
 };
 
 function initAnomalies() {
@@ -36,15 +34,15 @@ function renderAnomalyStats(all) {
     if (!el) return;
 
     const counts = {};
-    all.forEach(a => { const t = a.type || 'unknown'; counts[t] = (counts[t]||0)+1; });
+    all.forEach(a => { const t = a.type || 'unknown'; counts[t] = (counts[t] || 0) + 1; });
 
     el.innerHTML = Object.entries(counts)
-        .sort((a,b) => b[1]-a[1])
+        .sort((a, b) => b[1] - a[1])
         .map(([t, n]) => {
             const m = TYPE_META[t] || { icon: '❓', color: '#5f6680' };
             return `<div class="anomaly-stat-chip">
                 <span class="anomaly-stat-dot" style="background:${m.color}"></span>
-                <span>${t.replace(/_/g,' ')}</span>
+                <span>${t.replace(/_/g, ' ')}</span>
                 <span class="anomaly-stat-count">${n}</span>
             </div>`;
         }).join('');
@@ -72,8 +70,8 @@ function applyFilters() {
         if (type !== 'all' && a.type !== type) return false;
         if (sev !== 'all' && a.severity !== sev) return false;
         if (q && !(a.description || '').toLowerCase().includes(q)
-             && !(a.ward_name || '').toLowerCase().includes(q)
-             && !String(a.ward_number || '').includes(q)) return false;
+            && !(a.ward_name || '').toLowerCase().includes(q)
+            && !String(a.ward_number || '').includes(q)) return false;
         return true;
     });
 

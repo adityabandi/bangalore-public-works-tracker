@@ -1,4 +1,4 @@
-"""Anomaly detection engine - 8 heuristics for flagging suspicious BBMP work orders."""
+"""Anomaly detection engine - 10 heuristics for flagging suspicious BBMP work orders."""
 
 import hashlib
 import json
@@ -15,6 +15,7 @@ import pandas as pd
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from config import (
+    PROJECT_ROOT,
     PROCESSED_DIR,
     COST_OUTLIER_IQR_FACTOR,
     COST_OUTLIER_MIN_AMOUNT,
@@ -30,6 +31,12 @@ from config import (
     DEDUCTION_MIN_GROUP,
     BENFORD_CHI_SQUARED_THRESHOLD,
     BENFORD_MIN_SAMPLE,
+    REPEAT_WORK_MIN_OCCURRENCES,
+    REPEAT_WORK_SIMILARITY,
+    REPEAT_WORK_MIN_AMOUNT,
+    BID_BENCHMARK_FACTOR,
+    BID_MIN_GROUP_SIZE,
+    BID_MIN_AMOUNT,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -538,6 +545,171 @@ def detect_repeat_contractor(df):
     return anomalies
 
 
+# Detector 9: Repeat Work (same location gets budget year after year)
+
+def detect_repeat_work(df):
+    """Flag locations that receive repeated budget allocations across fiscal years."""
+    anomalies = []
+    if "fiscal_year" not in df.columns or "name_of_work" not in df.columns:
+        logger.warning("Repeat work: missing fiscal_year or name_of_work columns")
+        return anomalies
+
+    df_valid = df.dropna(subset=["ward_198", "name_of_work", "fiscal_year"]).copy()
+    df_valid = df_valid[df_valid["gross"] >= REPEAT_WORK_MIN_AMOUNT]
+    df_valid = df_valid[df_valid["fiscal_year"].str.strip() != ""]
+
+    for (ward, cat), group in df_valid.groupby(["ward_198", "category"]):
+        if pd.isna(ward) or len(group) < REPEAT_WORK_MIN_OCCURRENCES:
+            continue
+
+        # Build token sets and cluster similar works
+        records = group.to_dict("records")
+        tokens = [set(_extract_tokens(r.get("name_of_work", ""))) for r in records]
+        used = set()
+        clusters = []
+
+        for i in range(len(records)):
+            if i in used:
+                continue
+            cluster = [i]
+            used.add(i)
+            for j in range(i + 1, len(records)):
+                if j in used:
+                    continue
+                sim = _jaccard(tokens[i], tokens[j])
+                if sim >= REPEAT_WORK_SIMILARITY:
+                    cluster.append(j)
+                    used.add(j)
+            clusters.append(cluster)
+
+        # Check each cluster for occurrences across fiscal years
+        for cluster_indices in clusters:
+            if len(cluster_indices) < REPEAT_WORK_MIN_OCCURRENCES:
+                continue
+            cluster_records = [records[i] for i in cluster_indices]
+            fiscal_years = sorted(set(
+                r.get("fiscal_year", "") for r in cluster_records
+                if r.get("fiscal_year", "").strip()
+            ))
+            if len(fiscal_years) < REPEAT_WORK_MIN_OCCURRENCES:
+                continue
+
+            total_spend = sum(r.get("gross", 0) or 0 for r in cluster_records)
+            avg_spend = total_spend / len(cluster_records) if cluster_records else 0
+            sample_desc = str(cluster_records[0].get("name_of_work", ""))[:80]
+            ward_name = cluster_records[0].get("ward_name", "")
+
+            # Severity: 3yr=medium, 4yr=high, 5+=critical
+            n_years = len(fiscal_years)
+            if n_years >= 5:
+                score = min(1.0, 0.75 + (n_years - 5) * 0.05)
+            elif n_years >= 4:
+                score = 0.55
+            else:
+                score = 0.35
+
+            anomalies.append({
+                "anomaly_id": _anomaly_id(["repeat_work", ward, cat, sample_desc[:40]]),
+                "anomaly_type": "repeat_work",
+                "severity": _severity(score),
+                "score": round(score, 3),
+                "ward_198": str(ward),
+                "ward_name": ward_name,
+                "category": cat,
+                "description": (
+                    f"Repeated {cat} work in {_ward_label(ward, ward_name)} across "
+                    f"{n_years} fiscal years ({', '.join(fiscal_years[:5])}{'...' if n_years > 5 else ''}): "
+                    f"'{sample_desc}' — {len(cluster_records)} orders, "
+                    f"Rs {total_spend/1e5:,.1f}L total"
+                ),
+                "details": {
+                    "fiscal_years": fiscal_years,
+                    "num_years": n_years,
+                    "order_count": len(cluster_records),
+                    "total_spend": round(total_spend, 0),
+                    "avg_spend": round(avg_spend, 0),
+                    "sample_description": sample_desc,
+                },
+            })
+
+    logger.info(f"Repeat work: {len(anomalies)} flagged")
+    return anomalies
+
+
+# Detector 10: Bid/Benchmark Anomaly
+
+def _load_sor_benchmarks():
+    """Load Karnataka SoR benchmark rates."""
+    sor_path = os.path.join(PROJECT_ROOT, "benchmarks", "karnataka_sor_2024.json")
+    if not os.path.exists(sor_path):
+        logger.warning(f"SoR benchmark file not found: {sor_path}")
+        return {}
+    with open(sor_path) as f:
+        data = json.load(f)
+    return data.get("rates", {})
+
+
+def detect_bid_anomaly(df):
+    """Flag work orders significantly above benchmark rates and ward medians."""
+    anomalies = []
+    sor = _load_sor_benchmarks()
+    if not sor:
+        logger.warning("Bid anomaly: no SoR benchmarks loaded")
+        return anomalies
+
+    # Build per-category average SoR rate (simple average of all items in category)
+    category_sor_avg = {}
+    for cat, items in sor.items():
+        rates = [v["rate_inr"] for v in items.values() if "rate_inr" in v]
+        if rates:
+            category_sor_avg[cat] = sum(rates) / len(rates)
+
+    df_valid = df.dropna(subset=["ward_198", "gross", "category"]).copy()
+    df_valid = df_valid[df_valid["gross"] >= BID_MIN_AMOUNT]
+    df_valid = df_valid[df_valid["category"].isin(category_sor_avg.keys())]
+
+    for (ward, cat), group in df_valid.groupby(["ward_198", "category"]):
+        if pd.isna(ward) or len(group) < BID_MIN_GROUP_SIZE:
+            continue
+
+        median_cost = group["gross"].median()
+        threshold = median_cost * BID_BENCHMARK_FACTOR
+
+        outliers = group[group["gross"] > threshold]
+        for _, row in outliers.iterrows():
+            ratio = row["gross"] / median_cost if median_cost > 0 else 1
+            ward_name = row.get("ward_name", "")
+            contractor = row.get("contractor", "")
+
+            score = min(1.0, 0.35 + 0.15 * (ratio - BID_BENCHMARK_FACTOR))
+
+            anomalies.append({
+                "anomaly_id": _anomaly_id(["bid", ward, cat, row["gross"], contractor[:20]]),
+                "anomaly_type": "bid_anomaly",
+                "severity": _severity(score),
+                "score": round(score, 3),
+                "ward_198": str(ward),
+                "ward_name": ward_name,
+                "category": cat,
+                "description": (
+                    f"Rs {row['gross']/1e5:,.1f}L {cat} order in {_ward_label(ward, ward_name)} "
+                    f"is {ratio:.1f}× the ward median of Rs {median_cost/1e5:,.1f}L"
+                    f"{' by ' + contractor if contractor else ''}"
+                ),
+                "details": {
+                    "amount": float(row["gross"]),
+                    "ward_median": round(median_cost, 0),
+                    "ratio_to_median": round(ratio, 2),
+                    "sor_avg_rate": category_sor_avg.get(cat, 0),
+                    "contractor": contractor,
+                    "group_size": len(group),
+                },
+            })
+
+    logger.info(f"Bid anomaly: {len(anomalies)} flagged")
+    return anomalies
+
+
 # Main
 
 def run_all_detectors(df):
@@ -551,6 +723,8 @@ def run_all_detectors(df):
         detect_benford_violations,
         detect_split_orders,
         detect_repeat_contractor,
+        detect_repeat_work,
+        detect_bid_anomaly,
     ]
     for detector in detectors:
         try:

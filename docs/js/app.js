@@ -37,11 +37,12 @@ async function loadJSON(file) {
 async function boot() {
     document.getElementById('loading').style.display = 'flex';
     try {
-        const files = ['meta.json','summary.json','wards.json','anomalies.json',
-                        'contractors.json','timeseries.json','zones.json','insights.json'];
+        const files = ['meta.json', 'summary.json', 'wards.json', 'anomalies.json',
+            'contractors.json', 'timeseries.json', 'zones.json', 'insights.json',
+            'repeat_works.json', 'bids.json'];
         const results = await Promise.allSettled(files.map(f => loadJSON(f)));
         files.forEach((f, i) => {
-            const key = f.replace('.json','');
+            const key = f.replace('.json', '');
             DATA[key] = results[i].status === 'fulfilled' ? results[i].value : (key === 'zones' || key === 'insights' ? [] : {});
         });
         renderNav();
@@ -50,6 +51,8 @@ async function boot() {
         if (typeof initCharts === 'function') initCharts();
         if (typeof initAnomalies === 'function') initAnomalies();
         if (typeof initContractors === 'function') initContractors();
+        if (typeof initRepeatWorks === 'function') initRepeatWorks();
+        if (typeof initBids === 'function') initBids();
     } catch (e) {
         console.error('Boot error:', e);
     } finally {
@@ -65,10 +68,16 @@ function renderNav() {
 }
 
 function switchTab(name) {
-    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(t => {
+        t.classList.remove('active');
+        t.style.display = 'none';
+    });
     document.querySelectorAll('.nav-tab').forEach(b => b.classList.remove('active'));
     const tab = document.getElementById('tab-' + name);
-    if (tab) tab.classList.add('active');
+    if (tab) {
+        tab.classList.add('active');
+        tab.style.display = '';
+    }
     document.querySelectorAll(`.nav-tab[data-tab="${name}"]`).forEach(b => b.classList.add('active'));
     // Trigger map resize after tab becomes visible
     if (name === 'map' && typeof refreshMap === 'function') {
@@ -127,18 +136,18 @@ function renderZoneTable() {
             <td class="mono">${z.ward_count || 0}</td>
             <td>
                 <div style="display:flex;align-items:center;gap:0.5rem;">
-                    <div class="zone-bar" style="width:${((z.total_gross_lakhs||0)/maxSpend*100).toFixed(0)}%"></div>
-                    <span class="mono">${fmtCr(z.total_gross_lakhs||0)}</span>
+                    <div class="zone-bar" style="width:${((z.total_gross_lakhs || 0) / maxSpend * 100).toFixed(0)}%"></div>
+                    <span class="mono">${fmtCr(z.total_gross_lakhs || 0)}</span>
                 </div>
             </td>
             <td class="mono">${fmt(z.total_orders)}</td>
-            <td class="mono">${z.total_anomalies||0}</td>
+            <td class="mono">${z.total_anomalies || 0}</td>
         </tr>`).join('');
 }
 
 /* ── shared utilities ──────────────────────────────────── */
 function setText(id, v) { const e = document.getElementById(id); if (e) e.textContent = v; }
-function esc(s) { if (!s) return ''; const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
 /* ── start ─────────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded', boot);

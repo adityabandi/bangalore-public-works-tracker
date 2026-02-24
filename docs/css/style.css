@@ -748,6 +748,97 @@ footer {
     min-width: 1px;
 }
 
+/* ===== Repeat Works & Bid Analysis Tabs ===== */
+.severity-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 6px;
+    vertical-align: middle;
+}
+.severity-dot.critical { background: #f04444; box-shadow: 0 0 6px rgba(240,68,68,0.5); }
+.severity-dot.high { background: #f59e0b; box-shadow: 0 0 6px rgba(245,158,11,0.5); }
+.severity-dot.medium { background: #5b8def; }
+.severity-dot.low { background: #64748b; }
+
+.sub-section-title {
+    color: var(--text-primary);
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 1.5rem 0 0.75rem;
+}
+
+.fy-list {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+.rw-chart-card {
+    margin-bottom: 1.25rem;
+}
+
+.stat-chip {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 0.75rem 1.25rem;
+    min-width: 140px;
+    text-align: center;
+    gap: 2px;
+}
+.stat-chip .stat-value {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+.stat-chip .stat-label {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+.stat-chip.warn { border-color: rgba(245,158,11,0.35); }
+.stat-chip.warn .stat-value { color: #f59e0b; }
+.stat-chip.danger { border-color: rgba(240,68,68,0.35); }
+.stat-chip.danger .stat-value { color: #f04444; }
+
+.contractor-table .num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+/* ── Risk badges (contractors tab) ── */
+.risk-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+.risk-badge.risk-critical { background: rgba(240,68,68,0.18); color: #f04444; }
+.risk-badge.risk-high { background: rgba(245,158,11,0.18); color: #f59e0b; }
+.risk-badge.risk-medium { background: rgba(91,141,239,0.18); color: #5b8def; }
+.risk-badge.risk-low { background: rgba(100,116,139,0.12); color: #64748b; }
+.row-high-risk { background: rgba(240,68,68,0.05) !important; }
+.row-high-risk:hover { background: rgba(240,68,68,0.1) !important; }
+.col-anom { min-width: 50px; text-align: center; }
+.col-risk { min-width: 60px; text-align: center; }
+
+/* ── Repeat works contractor concentration ── */
+.rw-high-conc { background: rgba(245,158,11,0.06) !important; }
+.rw-high-conc:hover { background: rgba(245,158,11,0.12) !important; }
+.rw-contractor-cell { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.contractor-table .num.danger { color: #f04444; font-weight: 600; }
+.contractor-table .num.warn { color: #f59e0b; font-weight: 600; }
+
 /* ===== Responsive ===== */
 @media (max-width: 1024px) {
     .map-layout { grid-template-columns: 1fr; height: auto; }
@@ -770,4 +861,6 @@ footer {
     #map { min-height: 300px; }
     .insights-grid { grid-template-columns: 1fr; }
     .zone-table { font-size: 0.75rem; }
+    .stat-chip { min-width: 100px; padding: 0.5rem 0.75rem; }
+    .stat-chip .stat-value { font-size: 0.95rem; }
 }

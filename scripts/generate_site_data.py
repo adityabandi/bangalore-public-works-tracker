@@ -12,8 +12,10 @@ import pandas as pd
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from config import (
-    PROCESSED_DIR, SITE_DIR,
+    PROJECT_ROOT, PROCESSED_DIR, SITE_DIR,
     ANOMALIES_FEED_LIMIT, CONTRACTORS_LIMIT, TOP_CONTRACTORS_PER_WARD,
+    REPEAT_WORK_MIN_OCCURRENCES, REPEAT_WORK_SIMILARITY, REPEAT_WORK_MIN_AMOUNT,
+    BID_BENCHMARK_FACTOR, BID_MIN_GROUP_SIZE, BID_MIN_AMOUNT,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -256,19 +258,81 @@ def build_anomalies_feed(anomalies):
 
 # ── 6. contractors.json ───────────────────────────────────────────────────────
 
-def build_contractors(df):
+def build_contractors(df, anomalies=None, repeat_works=None, bids=None):
     if "contractor" not in df.columns:
         return []
+
+    anomalies = anomalies or []
+    repeat_works = repeat_works or []
+    bids = bids or {}
+
+    # Pre-compute anomaly counts per contractor (from description field)
+    con_anomaly_counts = defaultdict(int)
+    for a in anomalies:
+        desc = str(a.get("description", ""))
+        # Anomalies often mention the contractor name in the description
+        details = a.get("details", {}) if isinstance(a.get("details"), dict) else {}
+        con_name = details.get("contractor", "") or ""
+        if con_name:
+            con_anomaly_counts[con_name] += 1
+
+    # Pre-compute repeat work involvement per contractor
+    con_repeat_counts = defaultdict(int)
+    for rw in repeat_works:
+        for c in (rw.get("contractors") or []):
+            con_repeat_counts[c["name"]] += 1
+
+    # Pre-compute bid outlier counts per contractor
+    con_bid_outlier_counts = defaultdict(int)
+    for o in (bids.get("outlier_orders") or []):
+        cname = o.get("contractor", "")
+        if cname:
+            con_bid_outlier_counts[cname] += 1
 
     rows = []
     con_df = df.dropna(subset=["contractor"])
     for con, grp in con_df.groupby("contractor"):
+        con_str = str(con)
         wards = grp["ward_198"].dropna().nunique() if "ward_198" in grp.columns else 0
+        orders = len(grp)
+
+        # Top categories by spend
+        top_cats = []
+        if "category" in grp.columns and "gross" in grp.columns:
+            cat_spend = grp.groupby("category")["gross"].sum().sort_values(ascending=False)
+            top_cats = cat_spend.head(3).index.tolist()
+
+        # Top wards by spend
+        top_wards = []
+        if "ward_198" in grp.columns and "gross" in grp.columns:
+            ward_spend = grp.groupby("ward_198")["gross"].sum().sort_values(ascending=False)
+            top_wards = [_norm_ward(w) for w in ward_spend.head(3).index.tolist()]
+
+        anom_count = con_anomaly_counts.get(con_str, 0)
+        repeat_count = con_repeat_counts.get(con_str, 0)
+        bid_outlier_count = con_bid_outlier_counts.get(con_str, 0)
+
+        # Risk score: 0-1 composite
+        # Components: anomaly density, repeat involvement, bid overpricing
+        anomaly_density = min(anom_count / max(orders, 1), 1.0)     # 0-1
+        repeat_score = min(repeat_count / 5.0, 1.0)                  # 5+ clusters = max
+        bid_score = min(bid_outlier_count / 3.0, 1.0)                # 3+ outliers = max
+        risk_score = round(
+            0.4 * anomaly_density + 0.35 * repeat_score + 0.25 * bid_score,
+            3,
+        )
+
         rows.append({
-            "contractor": str(con),
+            "contractor": con_str,
             "gross_lakhs": _gross_lakhs(grp["gross"].sum()) if "gross" in grp.columns else 0,
-            "orders": len(grp),
+            "orders": orders,
             "wards": int(wards),
+            "anomaly_count": anom_count,
+            "repeat_work_count": repeat_count,
+            "bid_outlier_count": bid_outlier_count,
+            "risk_score": risk_score,
+            "top_categories": top_cats,
+            "top_wards": top_wards,
         })
 
     rows.sort(key=lambda r: r["gross_lakhs"], reverse=True)
@@ -407,6 +471,213 @@ def build_insights(df, anomalies, ward_names):
     return insights[:6]
 
 
+# ── 9. repeat_works.json ──────────────────────────────────────────────────────
+
+def _extract_tokens(text):
+    import re
+    text = str(text or "").lower()
+    text = re.sub(r"[^a-z0-9\s]", " ", text)
+    stops = {"of", "the", "and", "in", "to", "at", "for", "a", "an",
+             "no", "sl", "ward", "work", "from", "with", "by", "on"}
+    return set(w for w in text.split() if w and w not in stops and len(w) > 1)
+
+
+def _jaccard(set_a, set_b):
+    if not set_a or not set_b:
+        return 0.0
+    return len(set_a & set_b) / len(set_a | set_b)
+
+
+def build_repeat_works(df, ward_names):
+    """Build repeat works data — locations budgeted year after year."""
+    result = []
+
+    if "fiscal_year" not in df.columns or "name_of_work" not in df.columns:
+        logger.warning("Repeat works: missing fiscal_year or name_of_work columns")
+        return result
+
+    df_valid = df.dropna(subset=["ward_198", "name_of_work", "fiscal_year"]).copy()
+    df_valid = df_valid[df_valid["gross"] >= REPEAT_WORK_MIN_AMOUNT]
+    df_valid = df_valid[df_valid["fiscal_year"].str.strip() != ""]
+
+    for (ward, cat), group in df_valid.groupby(["ward_198", "category"]):
+        if pd.isna(ward) or len(group) < REPEAT_WORK_MIN_OCCURRENCES:
+            continue
+
+        records = group.to_dict("records")
+        tokens = [_extract_tokens(r.get("name_of_work", "")) for r in records]
+        used = set()
+        clusters = []
+
+        for i in range(len(records)):
+            if i in used:
+                continue
+            cluster = [i]
+            used.add(i)
+            for j in range(i + 1, len(records)):
+                if j in used:
+                    continue
+                if _jaccard(tokens[i], tokens[j]) >= REPEAT_WORK_SIMILARITY:
+                    cluster.append(j)
+                    used.add(j)
+            clusters.append(cluster)
+
+        for indices in clusters:
+            if len(indices) < REPEAT_WORK_MIN_OCCURRENCES:
+                continue
+            cluster_recs = [records[i] for i in indices]
+            fiscal_years = sorted(set(
+                r.get("fiscal_year", "") for r in cluster_recs
+                if r.get("fiscal_year", "").strip()
+            ))
+            if len(fiscal_years) < REPEAT_WORK_MIN_OCCURRENCES:
+                continue
+
+            total_spend = sum(r.get("gross", 0) or 0 for r in cluster_recs)
+            w = _norm_ward(ward)
+            wname = ward_names.get(w, cluster_recs[0].get("ward_name", f"Ward {w}"))
+
+            # ── Contractor analysis for this cluster ──
+            con_spend = defaultdict(lambda: {"orders": 0, "spend": 0})
+            for r in cluster_recs:
+                cname = str(r.get("contractor", "") or "").strip()
+                if cname:
+                    con_spend[cname]["orders"] += 1
+                    con_spend[cname]["spend"] += r.get("gross", 0) or 0
+
+            # Top 5 contractors by spend
+            con_list = sorted(con_spend.items(), key=lambda x: x[1]["spend"], reverse=True)[:5]
+            contractors = [
+                {"name": c, "orders": d["orders"], "spend_lakhs": _gross_lakhs(d["spend"])}
+                for c, d in con_list
+            ]
+
+            # Dominance: % of orders going to #1 contractor
+            total_orders_with_con = sum(d["orders"] for d in con_spend.values())
+            top_con_orders = con_list[0][1]["orders"] if con_list else 0
+            same_contractor_pct = round(
+                top_con_orders / total_orders_with_con * 100, 1
+            ) if total_orders_with_con > 0 else 0.0
+            dominant = con_list[0][0] if con_list and same_contractor_pct >= 50 else None
+
+            result.append({
+                "ward": w,
+                "ward_name": str(wname),
+                "category": str(cat),
+                "fiscal_years": fiscal_years,
+                "fy_count": len(fiscal_years),
+                "order_count": len(cluster_recs),
+                "total_spend_lakhs": _gross_lakhs(total_spend),
+                "avg_order_lakhs": _gross_lakhs(total_spend / len(cluster_recs)) if cluster_recs else 0,
+                "description_sample": str(cluster_recs[0].get("name_of_work", ""))[:100],
+                "contractors": contractors,
+                "same_contractor_pct": same_contractor_pct,
+                "dominant_contractor": dominant,
+            })
+
+    result.sort(key=lambda r: r["fy_count"], reverse=True)
+    logger.info(f"Repeat works: {len(result)} clusters")
+    return result
+
+
+# ── 10. bids.json ─────────────────────────────────────────────────────────────
+
+def _load_sor():
+    sor_path = os.path.join(PROJECT_ROOT, "benchmarks", "karnataka_sor_2024.json")
+    if not os.path.exists(sor_path):
+        return {}
+    with open(sor_path) as f:
+        data = json.load(f)
+    return data.get("rates", {})
+
+
+def build_bids(df):
+    """Build bid analysis data — compare work order costs to SoR benchmarks."""
+    sor = _load_sor()
+    if not sor:
+        logger.warning("Bids: no SoR benchmarks")
+        return {"categories": [], "outlier_orders": [], "contractor_pricing": []}
+
+    # Average SoR rate per category
+    cat_sor_avg = {}
+    for cat, items in sor.items():
+        rates = [v["rate_inr"] for v in items.values() if "rate_inr" in v]
+        if rates:
+            cat_sor_avg[cat] = round(sum(rates) / len(rates), 0)
+
+    df_valid = df.dropna(subset=["ward_198", "gross", "category"]).copy()
+    df_valid = df_valid[df_valid["gross"] >= BID_MIN_AMOUNT]
+
+    # Category summary
+    categories = []
+    for cat in cat_sor_avg:
+        cat_df = df_valid[df_valid["category"] == cat]
+        if cat_df.empty:
+            continue
+        categories.append({
+            "category": cat,
+            "sor_avg_rate": cat_sor_avg[cat],
+            "median_order_lakhs": _gross_lakhs(cat_df["gross"].median()),
+            "mean_order_lakhs": _gross_lakhs(cat_df["gross"].mean()),
+            "max_order_lakhs": _gross_lakhs(cat_df["gross"].max()),
+            "order_count": len(cat_df),
+        })
+
+    # Outlier orders (above benchmark threshold per ward-category)
+    outlier_orders = []
+    for (ward, cat), group in df_valid.groupby(["ward_198", "category"]):
+        if pd.isna(ward) or len(group) < BID_MIN_GROUP_SIZE:
+            continue
+        if cat not in cat_sor_avg:
+            continue
+
+        median_cost = group["gross"].median()
+        threshold = median_cost * BID_BENCHMARK_FACTOR
+        outliers = group[group["gross"] > threshold]
+
+        for _, row in outliers.iterrows():
+            ratio = row["gross"] / median_cost if median_cost > 0 else 1
+            outlier_orders.append({
+                "ward": _norm_ward(ward),
+                "ward_name": str(row.get("ward_name", "")),
+                "category": str(cat),
+                "amount_lakhs": _gross_lakhs(row["gross"]),
+                "ward_median_lakhs": _gross_lakhs(median_cost),
+                "ratio": round(ratio, 2),
+                "contractor": str(row.get("contractor", "")),
+            })
+
+    outlier_orders.sort(key=lambda r: r["ratio"], reverse=True)
+
+    # Contractor pricing (avg price per contractor per category vs ward median)
+    contractor_pricing = []
+    if "contractor" in df_valid.columns:
+        for (con, cat), group in df_valid.groupby(["contractor", "category"]):
+            if pd.isna(con) or cat not in cat_sor_avg or len(group) < 3:
+                continue
+            cat_median = df_valid[df_valid["category"] == cat]["gross"].median()
+            con_avg = group["gross"].mean()
+            ratio = con_avg / cat_median if cat_median > 0 else 1
+            contractor_pricing.append({
+                "contractor": str(con),
+                "category": str(cat),
+                "avg_order_lakhs": _gross_lakhs(con_avg),
+                "category_median_lakhs": _gross_lakhs(cat_median),
+                "ratio": round(ratio, 2),
+                "order_count": len(group),
+                "total_lakhs": _gross_lakhs(group["gross"].sum()),
+            })
+
+    contractor_pricing.sort(key=lambda r: r["ratio"], reverse=True)
+
+    logger.info(f"Bids: {len(categories)} categories, {len(outlier_orders)} outliers, {len(contractor_pricing)} contractor entries")
+    return {
+        "categories": categories,
+        "outlier_orders": outlier_orders,
+        "contractor_pricing": contractor_pricing,
+    }
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def save_json(data, filename):
@@ -426,11 +697,19 @@ def main():
     save_json(build_timeseries(df), "timeseries.json")
     save_json(build_wards(df, anomalies, ward_names, ward_zones), "wards.json")
     save_json(build_anomalies_feed(anomalies), "anomalies.json")
-    save_json(build_contractors(df), "contractors.json")
     save_json(build_zones(df, anomalies, ward_zones), "zones.json")
     save_json(build_insights(df, anomalies, ward_names), "insights.json")
 
-    logger.info("All 8 site JSON files generated.")
+    # Build repeat_works and bids first, so contractors can cross-reference them
+    repeat_works_data = build_repeat_works(df, ward_names)
+    bids_data = build_bids(df)
+    save_json(repeat_works_data, "repeat_works.json")
+    save_json(bids_data, "bids.json")
+
+    # Contractors with risk profile (cross-references anomalies, repeat works, bid outliers)
+    save_json(build_contractors(df, anomalies, repeat_works_data, bids_data), "contractors.json")
+
+    logger.info("All 10 site JSON files generated.")
 
 
 if __name__ == "__main__":
