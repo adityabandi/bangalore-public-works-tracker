@@ -1,5 +1,5 @@
 /* =====================================================================
-   app.js  –  Orchestrator: loads data, renders tabs, wires navigation
+   app.js — Core orchestrator: data loading, indexes, nav, shared utils
    ===================================================================== */
 
 const DATA = {};
@@ -9,7 +9,28 @@ const BASE = (() => {
     return new URL('data/', new URL(s.src, location.href).href.replace(/js\/app\.js.*/, '')).pathname;
 })();
 
-/* ── helpers ────────────────────────────────────────────── */
+/* ── Type metadata (shared across all views) ──────────── */
+const TYPE_META = {
+    cost_outlier:              { icon: '💰', color: '#f59e0b', label: 'Cost Outlier' },
+    contractor_concentration:  { icon: '🏢', color: '#a78bfa', label: 'Contractor Concentration' },
+    duplicate_work:            { icon: '📋', color: '#ef4444', label: 'Duplicate Work' },
+    payment_speed:             { icon: '⚡', color: '#22c55e', label: 'Payment Speed' },
+    deduction_ratio:           { icon: '📉', color: '#ec4899', label: 'Deduction Ratio' },
+    benford_violation:         { icon: '🔢', color: '#06b6d4', label: 'Benford Violation' },
+    split_order:               { icon: '✂️', color: '#f97316', label: 'Split Order' },
+    repeat_contractor:         { icon: '🔄', color: '#84cc16', label: 'Repeat Contractor' },
+    repeat_work:               { icon: '🔁', color: '#fb923c', label: 'Repeat Work' },
+    bid_anomaly:               { icon: '📊', color: '#e879f9', label: 'Bid Anomaly' },
+};
+
+const CAT_COLORS = {
+    roads: '#f59e0b', drainage: '#06b6d4', buildings: '#a78bfa', lighting: '#facc15',
+    water: '#3b82f6', swm: '#22c55e', surveillance: '#ec4899', other: '#6b7280',
+};
+
+const CHART_COLORS = ['#5b8def','#f59e0b','#22c55e','#ef4444','#a78bfa','#ec4899','#06b6d4','#84cc16','#f97316','#64748b'];
+
+/* ── Formatting helpers ────────────────────────────────── */
 function fmt(n) {
     if (n == null) return '—';
     if (typeof n === 'string') n = parseFloat(n);
@@ -26,8 +47,11 @@ function fmtDate(iso) {
     const d = new Date(iso);
     return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
 }
+function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+function setText(id, v) { const e = document.getElementById(id); if (e) e.textContent = v; }
+function truncate(s, n) { return s && s.length > n ? s.slice(0, n) + '…' : (s || ''); }
 
-/* ── data loading ──────────────────────────────────────── */
+/* ── Data loading ──────────────────────────────────────── */
 async function loadJSON(file) {
     const r = await fetch(BASE + file);
     if (!r.ok) throw new Error(`${file}: ${r.status}`);
@@ -37,22 +61,23 @@ async function loadJSON(file) {
 async function boot() {
     document.getElementById('loading').style.display = 'flex';
     try {
-        const files = ['meta.json', 'summary.json', 'wards.json', 'anomalies.json',
-            'contractors.json', 'timeseries.json', 'zones.json', 'insights.json',
-            'repeat_works.json', 'bids.json'];
+        const files = ['meta.json','summary.json','wards.json','anomalies.json',
+            'contractors.json','timeseries.json','zones.json','insights.json',
+            'repeat_works.json','bids.json'];
         const results = await Promise.allSettled(files.map(f => loadJSON(f)));
         files.forEach((f, i) => {
             const key = f.replace('.json', '');
-            DATA[key] = results[i].status === 'fulfilled' ? results[i].value : (key === 'zones' || key === 'insights' ? [] : {});
+            DATA[key] = results[i].status === 'fulfilled' ? results[i].value
+                : (key === 'zones' || key === 'insights' ? [] : {});
         });
+
+        buildIndex();
         renderNav();
-        renderOverview();
+
+        if (typeof initDashboard === 'function') initDashboard();
         if (typeof initMap === 'function') initMap();
+        if (typeof initInvestigate === 'function') initInvestigate();
         if (typeof initCharts === 'function') initCharts();
-        if (typeof initAnomalies === 'function') initAnomalies();
-        if (typeof initContractors === 'function') initContractors();
-        if (typeof initRepeatWorks === 'function') initRepeatWorks();
-        if (typeof initBids === 'function') initBids();
     } catch (e) {
         console.error('Boot error:', e);
     } finally {
@@ -60,11 +85,69 @@ async function boot() {
     }
 }
 
-/* ── nav ───────────────────────────────────────────────── */
+/* ── Cross-reference indexes ───────────────────────────── */
+function buildIndex() {
+    DATA._contractorIndex = {};
+    DATA._wardIndex = {};
+    DATA._typeIndex = {};
+
+    // Seed contractor index from contractors.json
+    (Array.isArray(DATA.contractors) ? DATA.contractors : []).forEach(c => {
+        const name = (c.contractor || '').toUpperCase();
+        if (!name) return;
+        DATA._contractorIndex[name] = { ...c, anomalies: [], wardSet: new Set(c.top_wards || []) };
+    });
+
+    // Seed ward index from wards.json
+    const wards = DATA.wards || {};
+    Object.entries(wards).forEach(([num, w]) => {
+        DATA._wardIndex[String(num)] = { ...w, ward_num: num, anomalies: [] };
+    });
+
+    // Seed type index
+    Object.keys(TYPE_META).forEach(t => {
+        DATA._typeIndex[t] = { anomalies: [], critical: 0, high: 0, medium: 0, low: 0, total: 0 };
+    });
+
+    // Iterate anomalies to cross-reference
+    (Array.isArray(DATA.anomalies) ? DATA.anomalies : []).forEach(a => {
+        const t = a.type || '';
+        const ward = String(a.ward_number || '');
+        const sev = a.severity || 'medium';
+
+        // Type index
+        if (DATA._typeIndex[t]) {
+            DATA._typeIndex[t].anomalies.push(a);
+            DATA._typeIndex[t][sev] = (DATA._typeIndex[t][sev] || 0) + 1;
+            DATA._typeIndex[t].total++;
+        }
+
+        // Ward index
+        if (ward && DATA._wardIndex[ward]) {
+            DATA._wardIndex[ward].anomalies.push(a);
+        }
+
+        // Contractor index — try to extract from description
+        const desc = (a.description || '').toUpperCase();
+        for (const cName of Object.keys(DATA._contractorIndex)) {
+            if (cName.length > 3 && desc.includes(cName)) {
+                DATA._contractorIndex[cName].anomalies.push(a);
+                if (ward) DATA._contractorIndex[cName].wardSet.add(ward);
+                break; // one match is enough
+            }
+        }
+    });
+}
+
+/* ── Navigation ────────────────────────────────────────── */
 function renderNav() {
     const m = DATA.meta || {};
     const el = document.getElementById('nav-updated');
     if (el) el.textContent = m.generated_at ? fmtDate(m.generated_at) : '';
+
+    const critical = (m.critical_anomalies || 0) + (m.high_anomalies || 0);
+    const pulseText = document.getElementById('nav-pulse-text');
+    if (pulseText) pulseText.textContent = `${critical} critical+high`;
 }
 
 function switchTab(name) {
@@ -74,80 +157,49 @@ function switchTab(name) {
     });
     document.querySelectorAll('.nav-tab').forEach(b => b.classList.remove('active'));
     const tab = document.getElementById('tab-' + name);
-    if (tab) {
-        tab.classList.add('active');
-        tab.style.display = '';
-    }
+    if (tab) { tab.classList.add('active'); tab.style.display = ''; }
     document.querySelectorAll(`.nav-tab[data-tab="${name}"]`).forEach(b => b.classList.add('active'));
-    // Trigger map resize after tab becomes visible
-    if (name === 'map' && typeof refreshMap === 'function') {
-        setTimeout(refreshMap, 100);
-    }
+    if (name === 'map' && typeof refreshMap === 'function') setTimeout(refreshMap, 100);
 }
 
-/* ── overview ──────────────────────────────────────────── */
-function renderOverview() {
-    const m = DATA.meta || {};
-    const s = DATA.summary || {};
+/* ── Shared anomaly card renderer ──────────────────────── */
+function renderAnomalyCard(a) {
+    const sev = a.severity || 'medium';
+    const type = a.type || 'unknown';
+    const meta = TYPE_META[type] || { icon: '❓', color: '#5a6178', label: type };
 
-    // Hero stats
-    setText('stat-orders', fmt(m.total_records));
-    setText('stat-spend', fmtCr(s.total_gross_lakhs || 0));
-    setText('stat-wards', m.total_wards || '—');
-    setText('stat-anomalies', fmt(m.total_anomalies));
-    setText('stat-critical', fmt((m.critical_anomalies || 0) + (m.high_anomalies || 0)));
-
-    // Insights
-    renderInsights();
-
-    // Zone table
-    renderZoneTable();
-}
-
-function renderInsights() {
-    const el = document.getElementById('insights-grid');
-    if (!el) return;
-    const items = Array.isArray(DATA.insights) ? DATA.insights : [];
-    if (!items.length) { el.innerHTML = ''; return; }
-    const icons = {
-        largest_order: '💰', top_contractor: '🏗️', most_flagged_ward: '🚩',
-        highest_spend_ward: '📊', largest_category: '🏷️', duplicate_value: '⚠️'
-    };
-    el.innerHTML = items.map(i => `
-        <div class="insight-card">
-            <div class="insight-icon">${icons[i.type] || '📋'}</div>
-            <div class="insight-body">
-                <div class="insight-title">${esc(i.label)}</div>
-                <div class="insight-value">${esc(i.value)}</div>
-                <div class="insight-detail" title="${esc(i.detail)}">${esc(i.detail)}</div>
+    return `
+    <div class="anomaly-card">
+        <div class="anomaly-severity severity-${sev}"></div>
+        <div class="anomaly-body">
+            <div class="anomaly-top">
+                <span class="anomaly-type-label" style="color:${meta.color}">${meta.icon} ${meta.label}</span>
+                <span class="anomaly-badge badge-${sev}">${sev}</span>
             </div>
-        </div>`).join('');
+            <div class="anomaly-desc">${esc(a.description || '')}</div>
+            <div class="anomaly-meta">
+                ${a.ward_name ? `<span class="anomaly-meta-tag" onclick="showWard('${esc(a.ward_number || '')}')">📍 ${esc(a.ward_name)}</span>` : ''}
+                ${a.ward_number ? `<span class="anomaly-meta-tag" onclick="showWard('${esc(a.ward_number)}')">Ward ${esc(String(a.ward_number))}</span>` : ''}
+                ${a.category ? `<span class="anomaly-meta-tag">${esc(a.category)}</span>` : ''}
+                ${a.score ? `<span class="anomaly-meta-tag">Score: ${Number(a.score).toFixed(2)}</span>` : ''}
+            </div>
+        </div>
+    </div>`;
 }
 
-function renderZoneTable() {
-    const el = document.getElementById('zone-tbody');
-    if (!el) return;
-    const zones = Array.isArray(DATA.zones) ? DATA.zones : [];
-    if (!zones.length) { el.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);">No zone data</td></tr>'; return; }
-    const maxSpend = Math.max(...zones.map(z => z.total_gross_lakhs || 0), 1);
-    el.innerHTML = zones.map(z => `
-        <tr>
-            <td>${esc(z.zone)}</td>
-            <td class="mono">${z.ward_count || 0}</td>
-            <td>
-                <div style="display:flex;align-items:center;gap:0.5rem;">
-                    <div class="zone-bar" style="width:${((z.total_gross_lakhs || 0) / maxSpend * 100).toFixed(0)}%"></div>
-                    <span class="mono">${fmtCr(z.total_gross_lakhs || 0)}</span>
-                </div>
-            </td>
-            <td class="mono">${fmt(z.total_orders)}</td>
-            <td class="mono">${z.total_anomalies || 0}</td>
-        </tr>`).join('');
+/* Navigate to ward in investigate tab */
+function showWard(wardNum) {
+    if (!wardNum) return;
+    switchTab('investigate');
+    if (typeof showWardDossier === 'function') showWardDossier(wardNum);
 }
 
-/* ── shared utilities ──────────────────────────────────── */
-function setText(id, v) { const e = document.getElementById(id); if (e) e.textContent = v; }
-function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+/* Navigate to contractor in investigate tab */
+function showContractor(name) {
+    if (!name) return;
+    switchTab('investigate');
+    if (typeof showContractorDossier === 'function') showContractorDossier(name);
+}
 
-/* ── start ─────────────────────────────────────────────── */
+/* ── Start ─────────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded', boot);

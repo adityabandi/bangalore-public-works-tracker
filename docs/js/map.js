@@ -84,7 +84,10 @@ function renderGeo(geo) {
             layer.bindTooltip(`<b>${name}</b><br>${METRICS[metric].label}: ${METRICS[metric].fmt(getVal(w, metric))}`, {
                 className: 'ward-tooltip', sticky: true
             });
-            layer.on('click', () => showWardDetail(wn));
+            layer.on('click', () => {
+                showWardDetail(wn);
+                showWard(wn);  // cross-link to investigate dossier
+            });
         }
     }).addTo(map);
 

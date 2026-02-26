@@ -1,51 +1,37 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bangalore Public Works Tracker</title>
-    <meta name="description"
-        content="Automated anomaly detection in BBMP public works spending across 198 wards. Track contractor concentration, cost overruns, and suspicious patterns.">
-    <link rel="icon"
-        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏗</text></svg>">
-
-    <!-- Leaflet -->
+    <meta name="description" content="Automated anomaly detection in BBMP public works spending across 198 wards. Track contractor concentration, cost overruns, and suspicious patterns.">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏗</text></svg>">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
-
-    <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-
-    <!-- Inter font -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link
-        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
-        rel="stylesheet">
-
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/style.css">
 </head>
-
 <body>
-    <!-- Top Navigation -->
     <nav id="nav">
         <div class="nav-inner">
             <div class="nav-brand">
                 <span class="nav-icon">🏗</span>
                 <span class="nav-title">BBMP Works Tracker</span>
             </div>
+            <div class="nav-pulse" id="nav-pulse" onclick="switchTab('investigate')">
+                <span class="nav-pulse-dot"></span>
+                <span id="nav-pulse-text">—</span>
+            </div>
             <div class="nav-tabs">
-                <button class="nav-tab active" data-tab="overview" onclick="switchTab('overview')">Overview</button>
-                <button class="nav-tab" data-tab="map" onclick="switchTab('map')">Ward Map</button>
-                <button class="nav-tab" data-tab="anomalies" onclick="switchTab('anomalies')">Anomalies</button>
-                <button class="nav-tab" data-tab="analytics" onclick="switchTab('analytics')">Analytics</button>
-                <button class="nav-tab" data-tab="contractors" onclick="switchTab('contractors')">Contractors</button>
-                <button class="nav-tab" data-tab="repeat-works" onclick="switchTab('repeat-works')">Repeat
-                    Works</button>
-                <button class="nav-tab" data-tab="bids" onclick="switchTab('bids')">Bid Analysis</button>
+                <button class="nav-tab active" data-tab="dashboard" onclick="switchTab('dashboard')">Dashboard</button>
+                <button class="nav-tab" data-tab="investigate" onclick="switchTab('investigate')">Investigate</button>
+                <button class="nav-tab" data-tab="map" onclick="switchTab('map')">Map</button>
+                <button class="nav-tab" data-tab="data" onclick="switchTab('data')">Data</button>
             </div>
             <div class="nav-meta">
-                <span id="nav-updated" class="nav-updated"></span>
+                <span id="nav-updated"></span>
             </div>
         </div>
     </nav>
@@ -56,85 +42,85 @@
             <span>Loading data…</span>
         </div>
 
-        <!-- ====== OVERVIEW TAB ====== -->
-        <section class="tab-content active" id="tab-overview">
-            <!-- Hero Stats -->
-            <div class="hero-stats" id="hero-stats">
-                <div class="hero-stat">
-                    <div class="hero-stat-value" id="stat-orders">--</div>
-                    <div class="hero-stat-label">Work Orders</div>
-                </div>
-                <div class="hero-stat">
-                    <div class="hero-stat-value" id="stat-spend">--</div>
-                    <div class="hero-stat-label">Total Spend</div>
-                </div>
-                <div class="hero-stat accent">
-                    <div class="hero-stat-value" id="stat-anomalies">--</div>
-                    <div class="hero-stat-label">Anomalies Flagged</div>
-                </div>
-                <div class="hero-stat">
-                    <div class="hero-stat-value" id="stat-wards">--</div>
-                    <div class="hero-stat-label">Wards Covered</div>
-                </div>
-                <div class="hero-stat accent">
-                    <div class="hero-stat-value" id="stat-critical">--</div>
-                    <div class="hero-stat-label">Critical + High</div>
-                </div>
-            </div>
+        <!-- ====== DASHBOARD TAB ====== -->
+        <section class="tab-content active" id="tab-dashboard">
+            <div id="alert-banner"></div>
+            <div id="scorecard" class="scorecard"></div>
 
-            <!-- Key Insights Cards -->
             <div class="section-header">
-                <h2>Key Findings</h2>
-                <p class="section-sub">Auto-generated insights from the data</p>
+                <h2>🔍 Worst Offenders</h2>
+                <button class="link-btn" onclick="switchTab('investigate')">Investigate All →</button>
             </div>
-            <div class="insights-grid" id="insights-grid"></div>
+            <div id="offenders-grid" class="offenders-grid"></div>
 
-            <!-- Overview Charts Row -->
-            <div class="overview-grid">
+            <div class="section-header">
+                <h2>🧩 Pattern Detection</h2>
+                <span class="section-sub">10 anomaly heuristics across all wards</span>
+            </div>
+            <div id="pattern-grid" class="pattern-grid"></div>
+
+            <div class="section-header">
+                <h2>💰 Money Flow</h2>
+            </div>
+            <div class="two-col-grid">
                 <div class="card">
-                    <div class="card-header">
-                        <h3>Spending by Category</h3>
-                    </div>
-                    <div class="card-body chart-container">
-                        <canvas id="chart-category"></canvas>
-                    </div>
+                    <div class="card-header"><h3>Spending by Year &amp; Category</h3></div>
+                    <div class="card-body chart-container-lg"><canvas id="chart-flow"></canvas></div>
                 </div>
                 <div class="card">
-                    <div class="card-header">
-                        <h3>Yearly Spending Trend</h3>
-                    </div>
-                    <div class="card-body chart-container">
-                        <canvas id="chart-yearly"></canvas>
-                    </div>
+                    <div class="card-header"><h3>Category Breakdown</h3></div>
+                    <div class="card-body chart-container"><canvas id="chart-category-donut"></canvas></div>
                 </div>
             </div>
 
-            <!-- Top Anomalies Preview -->
             <div class="section-header">
-                <h2>Recent Critical Anomalies</h2>
-                <button class="link-btn" onclick="switchTab('anomalies')">View All →</button>
-            </div>
-            <div id="overview-anomalies" class="anomaly-list"></div>
-
-            <!-- Zone Comparison -->
-            <div class="section-header">
-                <h2>Zone Comparison</h2>
-                <p class="section-sub">Spending and anomalies by BBMP zone</p>
+                <h2>🗺️ Zone Comparison</h2>
+                <span class="section-sub">Spend vs anomalies by BBMP zone</span>
             </div>
             <div class="card">
-                <div class="card-body" style="overflow-x:auto;">
-                    <table class="zone-table">
-                        <thead>
-                            <tr>
-                                <th>Zone</th>
-                                <th>Wards</th>
-                                <th>Spend</th>
-                                <th>Orders</th>
-                                <th>Anomalies</th>
-                            </tr>
-                        </thead>
-                        <tbody id="zone-tbody"></tbody>
-                    </table>
+                <div class="card-body" id="zone-bars"></div>
+            </div>
+        </section>
+
+        <!-- ====== INVESTIGATE TAB ====== -->
+        <section class="tab-content" id="tab-investigate">
+            <div class="investigate-layout">
+                <aside class="inv-sidebar">
+                    <div class="inv-sidebar-section">
+                        <div class="inv-sidebar-label">Search</div>
+                        <input type="text" id="inv-search" class="inv-search" placeholder="Contractor, ward, or keyword…">
+                    </div>
+                    <div class="inv-sidebar-section">
+                        <div class="inv-sidebar-label">View</div>
+                        <div class="inv-entity-btns">
+                            <button class="inv-entity-btn active" data-entity="anomalies" onclick="setEntity('anomalies')">Anomalies</button>
+                            <button class="inv-entity-btn" data-entity="contractors" onclick="setEntity('contractors')">Contractors</button>
+                            <button class="inv-entity-btn" data-entity="wards" onclick="setEntity('wards')">Wards</button>
+                        </div>
+                    </div>
+                    <div class="inv-sidebar-section">
+                        <div class="inv-sidebar-label">Severity</div>
+                        <div class="inv-sev-btns">
+                            <button class="inv-sev-btn active" data-sev="critical" onclick="toggleSev('critical')"><span class="dot"></span>Critical</button>
+                            <button class="inv-sev-btn active" data-sev="high" onclick="toggleSev('high')"><span class="dot"></span>High</button>
+                            <button class="inv-sev-btn" data-sev="medium" onclick="toggleSev('medium')"><span class="dot"></span>Medium</button>
+                            <button class="inv-sev-btn" data-sev="low" onclick="toggleSev('low')"><span class="dot"></span>Low</button>
+                        </div>
+                    </div>
+                    <div class="inv-sidebar-section">
+                        <div class="inv-sidebar-label">Anomaly Type</div>
+                        <div id="inv-type-filter" class="inv-cat-list"></div>
+                    </div>
+                    <div class="inv-sidebar-section">
+                        <div class="inv-sidebar-label">Category</div>
+                        <div id="inv-cat-filter" class="inv-cat-list"></div>
+                    </div>
+                </aside>
+                <div class="inv-main">
+                    <div id="inv-dossier"></div>
+                    <div id="inv-count" class="data-count"></div>
+                    <div id="inv-results" class="anomaly-list"></div>
+                    <button id="inv-load-more" class="btn-secondary hidden" onclick="invLoadMore()">Load More</button>
                 </div>
             </div>
         </section>
@@ -144,8 +130,7 @@
             <div class="map-layout">
                 <div class="map-main">
                     <div class="map-toolbar">
-                        <input type="text" id="ward-search" placeholder="Search ward by name or number..."
-                            class="search-input">
+                        <input type="text" id="ward-search" placeholder="Search ward by name or number…" class="search-input" style="flex:1;">
                         <select id="map-metric" class="select-input">
                             <option value="anomaly_score">Anomaly Score</option>
                             <option value="total_gross_lakhs">Total Spend</option>
@@ -163,264 +148,50 @@
             </div>
         </section>
 
-        <!-- ====== ANOMALIES TAB ====== -->
-        <section class="tab-content" id="tab-anomalies">
-            <div class="section-header">
-                <h2>Anomaly Feed</h2>
-                <p class="section-sub">Statistical anomalies flagged for investigation</p>
+        <!-- ====== DATA TAB ====== -->
+        <section class="tab-content" id="tab-data">
+            <div class="section-header" style="margin-top:0;">
+                <h2>📋 Raw Data</h2>
             </div>
-
-            <!-- Anomaly Stats Bar -->
-            <div class="anomaly-stats" id="anomaly-stats"></div>
-
-            <!-- Filters -->
-            <div class="filter-bar">
-                <select id="filter-type" class="select-input">
-                    <option value="all">All Types</option>
-                    <option value="cost_outlier">Cost Outliers</option>
-                    <option value="contractor_concentration">Contractor Concentration</option>
-                    <option value="duplicate_work">Duplicate Works</option>
-                    <option value="payment_speed">Payment Speed</option>
-                    <option value="deduction_ratio">Deduction Ratio</option>
-                    <option value="benford_violation">Benford Violations</option>
-                    <option value="split_order">Split Orders</option>
-                    <option value="repeat_contractor">Repeat Contractors</option>
-                    <option value="repeat_work">Repeat Works</option>
-                    <option value="bid_anomaly">Bid Anomalies</option>
-                </select>
-                <select id="filter-severity" class="select-input">
-                    <option value="all">All Severity</option>
-                    <option value="critical">Critical</option>
-                    <option value="high">High</option>
-                    <option value="medium">Medium</option>
-                    <option value="low">Low</option>
-                </select>
-                <input type="text" id="filter-search" placeholder="Search wards, contractors..."
-                    class="search-input flex-grow">
+            <div class="data-sub-tabs">
+                <button class="data-sub-tab active" onclick="switchDataTab('contractors')">Contractors</button>
+                <button class="data-sub-tab" onclick="switchDataTab('repeat_works')">Repeat Works</button>
+                <button class="data-sub-tab" onclick="switchDataTab('bids')">Bid Analysis</button>
+                <button class="data-sub-tab" onclick="switchDataTab('anomalies')">All Anomalies</button>
             </div>
-
-            <p id="anomaly-showing" style="font-size:0.75rem;color:var(--text-muted);margin-bottom:0.5rem;"></p>
-            <div id="anomaly-list" class="anomaly-list"></div>
-            <button id="load-more-btn" class="btn-secondary hidden" onclick="loadMore()">Load More</button>
-        </section>
-
-        <!-- ====== ANALYTICS TAB ====== -->
-        <section class="tab-content" id="tab-analytics">
-            <div class="section-header">
-                <h2>Analytics</h2>
-                <p class="section-sub">Deep-dive into spending patterns and contractor analysis</p>
+            <div class="data-toolbar">
+                <input type="text" id="data-search" class="search-input" placeholder="Search…">
+                <span id="data-count" class="data-count"></span>
             </div>
-
-            <div class="analytics-grid">
-                <div class="card span-2">
-                    <div class="card-header">
-                        <h3>Top 15 Contractors</h3>
-                    </div>
-                    <div class="card-body chart-container-lg">
-                        <canvas id="chart-contractors"></canvas>
-                    </div>
-                </div>
-                <div class="card">
-                    <div class="card-header">
-                        <h3>Anomalies by Type</h3>
-                    </div>
-                    <div class="card-body chart-container">
-                        <canvas id="chart-anomaly-types"></canvas>
-                    </div>
-                </div>
-                <div class="card">
-                    <div class="card-header">
-                        <h3>Category Spend Trend</h3>
-                    </div>
-                    <div class="card-body chart-container">
-                        <canvas id="chart-category-trend"></canvas>
-                    </div>
-                </div>
-                <div class="card span-2">
-                    <div class="card-header">
-                        <h3>Top 20 Wards by Spend</h3>
-                    </div>
-                    <div class="card-body chart-container-lg">
-                        <canvas id="chart-ward-spend"></canvas>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- ====== CONTRACTORS TAB ====== -->
-        <section class="tab-content" id="tab-contractors">
-            <div class="section-header">
-                <h2>Contractors</h2>
-                <p class="section-sub">All contractors ranked by total spend across BBMP work orders</p>
-            </div>
-
-            <!-- Stats + Search row -->
-            <div class="contractor-toolbar">
-                <div class="contractor-stats-chips" id="contractor-stats"></div>
-                <input type="text" id="contractor-search" placeholder="Search contractor name…" class="search-input">
-            </div>
-
-            <p id="contractor-showing" style="font-size:0.75rem;color:var(--text-muted);margin-bottom:0.5rem;"></p>
-
             <div class="card">
-                <div class="card-body" style="overflow-x:auto;padding:0;">
-                    <table class="contractor-table" id="contractor-table">
-                        <thead>
-                            <tr>
-                                <th class="col-rank">#</th>
-                                <th class="col-name sortable" data-col="contractor">Contractor <span
-                                        class="sort-icon">↕</span></th>
-                                <th class="col-spend sortable sorted-desc" data-col="gross_lakhs">Spend (₹) <span
-                                        class="sort-icon">↓</span></th>
-                                <th class="col-orders sortable" data-col="orders">Orders <span
-                                        class="sort-icon">↕</span></th>
-                                <th class="col-wards sortable" data-col="wards">Wards <span class="sort-icon">↕</span>
-                                </th>
-                                <th class="col-anom sortable" data-col="anomaly_count">Flags <span
-                                        class="sort-icon">↕</span></th>
-                                <th class="col-risk sortable" data-col="risk_score">Risk <span
-                                        class="sort-icon">↕</span></th>
-                                <th class="col-bar">Spend Share</th>
-                            </tr>
-                        </thead>
-                        <tbody id="contractor-tbody"></tbody>
+                <div class="card-body" style="overflow-x:auto;padding:0;max-height:70vh;overflow-y:auto;">
+                    <table id="data-table" class="data-table">
+                        <thead id="data-thead"></thead>
+                        <tbody id="data-tbody"></tbody>
                     </table>
                 </div>
             </div>
-            <button id="contractor-load-more" class="btn-secondary hidden" onclick="contractorLoadMore()">Load
-                More</button>
-        </section>
-
-        <!-- ====== REPEAT WORKS TAB ====== -->
-        <section id="tab-repeat-works" class="tab-content" style="display:none;">
-            <div class="section-header">
-                <h2>🔁 Repeat Works</h2>
-                <p class="section-sub">Locations that keep receiving budget year after year — possible quality or
-                    maintenance issues</p>
-            </div>
-
-            <div class="contractor-toolbar">
-                <div class="contractor-stats-chips" id="rw-stats"></div>
-                <input type="text" id="rw-search" placeholder="Search location, ward, or category…"
-                    class="search-input">
-            </div>
-
-            <div class="card rw-chart-card">
-                <div class="card-body" style="height:500px;">
-                    <canvas id="rw-chart"></canvas>
-                </div>
-            </div>
-
-            <div class="card">
-                <div class="card-body" style="overflow-x:auto;padding:0;">
-                    <table class="contractor-table" id="rw-table">
-                        <thead>
-                            <tr>
-                                <th data-sort="description_sample" style="min-width:240px;">Work Description</th>
-                                <th data-sort="ward_name">Ward</th>
-                                <th data-sort="category">Category</th>
-                                <th data-sort="dominant_contractor">Top Contractor</th>
-                                <th data-sort="same_contractor_pct" class="num">Conc %</th>
-                                <th data-sort="fy_count" class="num">FY Count ↓</th>
-                                <th data-sort="order_count" class="num">Orders</th>
-                                <th data-sort="total_spend_lakhs" class="num">Total Spend</th>
-                                <th data-sort="avg_order_lakhs" class="num">Avg Order</th>
-                                <th>Fiscal Years</th>
-                            </tr>
-                        </thead>
-                        <tbody id="rw-tbody"></tbody>
-                    </table>
-                </div>
-            </div>
-            <button id="rw-more" class="btn-secondary">Load More</button>
-        </section>
-
-        <!-- ====== BID ANALYSIS TAB ====== -->
-        <section id="tab-bids" class="tab-content" style="display:none;">
-            <div class="section-header">
-                <h2>📊 Bid Analysis</h2>
-                <p class="section-sub">Cost comparison against SoR benchmarks and ward medians — flagging overpriced
-                    orders</p>
-            </div>
-
-            <div class="contractor-toolbar">
-                <div class="contractor-stats-chips" id="bid-stats"></div>
-                <input type="text" id="bid-search" placeholder="Search ward, category, or contractor…"
-                    class="search-input">
-            </div>
-
-            <div class="card">
-                <div class="card-body" style="height:340px;">
-                    <canvas id="bid-category-chart"></canvas>
-                </div>
-            </div>
-
-            <h3 class="sub-section-title">Above-Benchmark Orders</h3>
-            <div class="card">
-                <div class="card-body" style="overflow-x:auto;padding:0;">
-                    <table class="contractor-table" id="bid-outlier-table">
-                        <thead>
-                            <tr>
-                                <th>Ward</th>
-                                <th>Category</th>
-                                <th class="num">Amount</th>
-                                <th class="num">Ward Median</th>
-                                <th class="num">Ratio</th>
-                                <th>Contractor</th>
-                            </tr>
-                        </thead>
-                        <tbody id="bid-outlier-tbody"></tbody>
-                    </table>
-                </div>
-            </div>
-            <button id="bid-outlier-more" class="btn-secondary">Load More</button>
-
-            <h3 class="sub-section-title">Contractor Pricing Comparison</h3>
-            <div class="card">
-                <div class="card-body" style="overflow-x:auto;padding:0;">
-                    <table class="contractor-table" id="bid-con-table">
-                        <thead>
-                            <tr>
-                                <th>Contractor</th>
-                                <th>Category</th>
-                                <th class="num">Avg Order</th>
-                                <th class="num">Category Median</th>
-                                <th class="num">Ratio</th>
-                                <th class="num">Orders</th>
-                                <th class="num">Total Spend</th>
-                            </tr>
-                        </thead>
-                        <tbody id="bid-con-tbody"></tbody>
-                    </table>
-                </div>
-            </div>
-            <button id="bid-con-more" class="btn-secondary">Load More</button>
+            <button id="data-load-more" class="btn-secondary hidden" onclick="dataLoadMore()">Load More</button>
         </section>
     </main>
 
-    <!-- Footer -->
     <footer>
         <div class="footer-inner">
             <p>
                 Data from <a href="https://data.opencity.in" target="_blank">OpenCity.in</a> •
-                Boundaries from <a href="https://github.com/datameet/Municipal_Spatial_Data"
-                    target="_blank">DataMeet</a> •
+                Boundaries from <a href="https://github.com/datameet/Municipal_Spatial_Data" target="_blank">DataMeet</a> •
                 <a href="https://github.com/adityabandi/bangalore-public-works-tracker" target="_blank">Source Code</a>
             </p>
             <p class="disclaimer">
-                This tool flags statistical anomalies for further investigation. Flagged items are not accusations of
-                wrongdoing.
+                This tool flags statistical anomalies for further investigation. Flagged items are not accusations of wrongdoing.
             </p>
         </div>
     </footer>
 
     <script src="js/app.js"></script>
-    <script src="js/map.js"></script>
+    <script src="js/dashboard.js"></script>
+    <script src="js/investigate.js"></script>
     <script src="js/charts.js"></script>
-    <script src="js/anomalies.js"></script>
-    <script src="js/contractors.js"></script>
-    <script src="js/repeat_works.js"></script>
-    <script src="js/bids.js"></script>
+    <script src="js/map.js"></script>
 </body>
-
 </html>
