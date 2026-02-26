@@ -63,7 +63,7 @@ async function boot() {
     try {
         const files = ['meta.json','summary.json','wards.json','anomalies.json',
             'contractors.json','timeseries.json','zones.json','insights.json',
-            'repeat_works.json','bids.json'];
+            'repeat_works.json','bids.json','tenders.json'];
         const results = await Promise.allSettled(files.map(f => loadJSON(f)));
         files.forEach((f, i) => {
             const key = f.replace('.json', '');

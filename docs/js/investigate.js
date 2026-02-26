@@ -408,6 +408,41 @@ function renderDataTable() {
         rows = [...rows];
         if (dataState.query) rows = rows.filter(r => (r.ward_name || '').toLowerCase().includes(dataState.query) || (r.contractor || '').toLowerCase().includes(dataState.query));
         rows.sort((a, b) => (b.ratio || 0) - (a.ratio || 0));
+    } else if (dataState.tab === 'tenders') {
+        columns = [
+            { key: 'ward', label: 'Ward', cls: 'num' },
+            { key: 'title', label: 'Tender Title', cls: 'name-cell' },
+            { key: 'value_lakhs', label: 'Value (₹L)', cls: 'num' },
+            { key: 'category', label: 'Category', cls: '' },
+            { key: 'fy', label: 'FY', cls: '' },
+            { key: 'zone', label: 'Zone', cls: '' },
+            { key: 'published_date', label: 'Published', cls: '' },
+        ];
+        const tenders = DATA.tenders || {};
+        rows = [...(tenders.records || [])];
+        if (dataState.query) {
+            const q = dataState.query;
+            rows = rows.filter(r => (r.title || '').toLowerCase().includes(q) || (r.zone || '').toLowerCase().includes(q) || String(r.ward || '').includes(q));
+        }
+        rows.sort((a, b) => (b.value_lakhs || 0) - (a.value_lakhs || 0));
+    } else if (dataState.tab === 'tender_gaps') {
+        columns = [
+            { key: 'ward', label: 'Ward', cls: 'num' },
+            { key: 'ward_name', label: 'Ward Name', cls: '' },
+            { key: 'zone', label: 'Zone', cls: '' },
+            { key: 'fy', label: 'FY', cls: '' },
+            { key: 'tender_total_lakhs', label: 'Estimated (₹L)', cls: 'num' },
+            { key: 'actual_total_lakhs', label: 'Actual (₹L)', cls: 'num' },
+            { key: 'gap_pct', label: 'Gap %', cls: 'num' },
+            { key: 'gap_lakhs', label: 'Gap (₹L)', cls: 'num' },
+        ];
+        const tenders = DATA.tenders || {};
+        rows = [...(tenders.gap_analysis || [])];
+        if (dataState.query) {
+            const q = dataState.query;
+            rows = rows.filter(r => (r.ward_name || '').toLowerCase().includes(q) || (r.zone || '').toLowerCase().includes(q) || String(r.ward || '').includes(q));
+        }
+        rows.sort((a, b) => Math.abs(b.gap_pct || 0) - Math.abs(a.gap_pct || 0));
     } else if (dataState.tab === 'anomalies') {
         columns = [
             { key: 'type', label: 'Type', cls: '' },
@@ -433,6 +468,7 @@ function renderDataTable() {
     tbody.innerHTML = batch.map(row => {
         const rowClass = dataState.tab === 'contractors' && (row.risk_score || 0) >= 0.6 ? 'row-danger'
             : dataState.tab === 'bids' && (row.ratio || 0) >= 5 ? 'row-danger'
+            : dataState.tab === 'tender_gaps' && Math.abs(row.gap_pct || 0) >= 100 ? 'row-danger'
             : dataState.tab === 'anomalies' && row.severity === 'critical' ? 'row-danger'
             : '';
         return `<tr class="${rowClass}">${columns.map(c => {
@@ -447,6 +483,11 @@ function renderDataTable() {
             if (c.key === 'type') {
                 const m = TYPE_META[v] || {};
                 return `<td>${m.icon || ''} ${(m.label || v || '').replace(/_/g, ' ')}</td>`;
+            }
+            if (c.key === 'gap_pct' && v != null) {
+                const absV = Math.abs(v);
+                const gapStyle = absV >= 100 ? 'color:var(--critical);font-weight:700' : absV >= 50 ? 'color:var(--high);font-weight:600' : '';
+                return `<td class="${c.cls}" style="${gapStyle}">${v > 0 ? '+' : ''}${absV > 9999 ? (v > 0 ? '+9999' : '-9999') : v}%</td>`;
             }
             if (c.key === 'ratio' && v != null) return `<td class="${c.cls}" style="${v >= 3 ? 'color:var(--critical);font-weight:700' : ''}">${Number(v).toFixed(1)}×</td>`;
             if (c.key === 'same_contractor_pct' && v != null) return `<td class="${c.cls}" style="${v >= 70 ? 'color:var(--critical);font-weight:700' : ''}">${v}%</td>`;
