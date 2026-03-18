@@ -709,7 +709,143 @@ def main():
     # Contractors with risk profile (cross-references anomalies, repeat works, bid outliers)
     save_json(build_contractors(df, anomalies, repeat_works_data, bids_data), "contractors.json")
 
-    logger.info("All 10 site JSON files generated.")
+    # Pre-computed narrative data for investigation stories
+    save_json(build_stories(df, anomalies, ward_names), "stories.json")
+
+    logger.info("All 11 site JSON files generated.")
+
+
+# ── 11. stories.json ─────────────────────────────────────────────────────────
+
+def build_stories(df, anomalies, ward_names):
+    """Pre-compute data for the 5 investigation stories on the frontend."""
+    stories = {}
+
+    # ── 1. KRIDL Monopoly ──
+    if "contractor" in df.columns:
+        kridl_mask = df["contractor"].str.upper().str.contains("KRIDL", na=False)
+        kridl_df = df[kridl_mask]
+        total_spend = df["gross"].sum() if "gross" in df.columns else 1
+        kridl_spend = kridl_df["gross"].sum() if "gross" in kridl_df.columns else 0
+
+        kridl_variants = (
+            kridl_df.groupby("contractor")
+            .agg(spend=("gross", "sum"), orders=("contractor", "count"))
+            .sort_values("spend", ascending=False)
+        )
+        stories["kridl"] = {
+            "total_spend_lakhs": _gross_lakhs(kridl_spend),
+            "total_spend_crores": round(kridl_spend / 1e7, 1),
+            "total_orders": int(len(kridl_df)),
+            "variant_count": int(len(kridl_variants)),
+            "pct_of_total": round(kridl_spend / max(total_spend, 1) * 100, 1),
+            "wards_served": int(kridl_df["ward_198"].nunique()) if "ward_198" in kridl_df.columns else 0,
+            "top_variants": [
+                {
+                    "name": str(name),
+                    "spend_lakhs": _gross_lakhs(row["spend"]),
+                    "spend_crores": round(float(row["spend"]) / 1e7, 1),
+                    "orders": int(row["orders"]),
+                }
+                for name, row in kridl_variants.head(20).iterrows()
+            ],
+        }
+    else:
+        stories["kridl"] = {}
+
+    # ── 2. Zero-Day Payments ──
+    payment_anomalies = [
+        a for a in anomalies
+        if a.get("anomaly_type", a.get("type", "")) == "payment_speed"
+    ]
+    # Extract ward and contractor data from payment speed anomalies
+    pay_by_ward = defaultdict(int)
+    pay_by_contractor = defaultdict(int)
+    for a in payment_anomalies:
+        w = _norm_ward(a.get("ward_198", ""))
+        if w:
+            wname = ward_names.get(w, f"Ward {w}")
+            pay_by_ward[wname] += 1
+        details = a.get("details", {}) if isinstance(a.get("details"), dict) else {}
+        con = details.get("contractor", "")
+        if con:
+            pay_by_contractor[con] += 1
+
+    stories["zero_day_payments"] = {
+        "count": len(payment_anomalies),
+        "top_wards": sorted(
+            [{"name": k, "count": v} for k, v in pay_by_ward.items()],
+            key=lambda x: x["count"], reverse=True,
+        )[:10],
+        "top_contractors": sorted(
+            [{"name": k, "count": v} for k, v in pay_by_contractor.items()],
+            key=lambda x: x["count"], reverse=True,
+        )[:10],
+    }
+
+    # ── 3. Split Orders ──
+    split_anomalies = [
+        a for a in anomalies
+        if a.get("anomaly_type", a.get("type", "")) == "split_order"
+    ]
+    # Build histogram by threshold from anomaly details
+    thresholds = [500000, 1000000, 2500000, 5000000, 10000000, 25000000, 50000000]
+    threshold_labels = ["5L", "10L", "25L", "50L", "1Cr", "2.5Cr", "5Cr"]
+    threshold_counts = [0] * len(thresholds)
+    for a in split_anomalies:
+        details = a.get("details", {}) if isinstance(a.get("details"), dict) else {}
+        t_val = details.get("threshold", 0) or 0
+        if t_val in thresholds:
+            threshold_counts[thresholds.index(t_val)] += 1
+
+    stories["split_orders"] = {
+        "count": len(split_anomalies),
+        "critical_count": sum(1 for a in split_anomalies if a.get("severity") == "critical"),
+        "threshold_histogram": [
+            {"threshold": threshold_labels[i], "count": threshold_counts[i]}
+            for i in range(len(thresholds))
+        ],
+    }
+
+    # ── 4. Tender Gaps (read from tenders.json if already built) ──
+    tenders_path = os.path.join(SITE_DIR, "tenders.json")
+    tender_gaps = []
+    if os.path.exists(tenders_path):
+        with open(tenders_path) as f:
+            tdata = json.load(f)
+        tender_gaps = (tdata.get("gap_analysis") or [])[:10]
+    stories["tender_gaps"] = {
+        "top_overruns": tender_gaps,
+        "worst_gap_pct": tender_gaps[0].get("gap_pct", 0) if tender_gaps else 0,
+        "worst_ward": tender_gaps[0].get("ward_name", "") if tender_gaps else "",
+    }
+
+    # ── 5. Repeat Works (read from repeat_works.json if already built) ──
+    rw_path = os.path.join(SITE_DIR, "repeat_works.json")
+    repeat_cases = []
+    if os.path.exists(rw_path):
+        with open(rw_path) as f:
+            rw_data = json.load(f)
+        if isinstance(rw_data, list):
+            repeat_cases = rw_data[:15]
+    stories["repeat_works"] = {
+        "total_clusters": len(rw_data) if isinstance(rw_data, list) else 0 if os.path.exists(rw_path) else 0,
+        "worst_cases": repeat_cases,
+    }
+
+    # ── 6. Context Comparisons ──
+    total_gross = df["gross"].sum() if "gross" in df.columns else 0
+    total_crores = round(total_gross / 1e7, 1)
+    bangalore_pop = 13000000  # ~1.3 crore
+    stories["context"] = {
+        "total_crores": total_crores,
+        "per_resident": round(total_gross / bangalore_pop, 0),
+        "metro_km_equivalent": round(total_crores / 500, 1),
+        "schools_equivalent": round(total_crores / 5, 0),
+    }
+
+    logger.info(f"Stories: built {len(stories)} narrative datasets")
+    return stories
 
 
 if __name__ == "__main__":

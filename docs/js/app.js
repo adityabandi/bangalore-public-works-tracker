@@ -11,24 +11,22 @@ const BASE = (() => {
 
 /* ── Type metadata (shared across all views) ──────────── */
 const TYPE_META = {
-    cost_outlier:              { icon: '💰', color: '#f59e0b', label: 'Cost Outlier' },
-    contractor_concentration:  { icon: '🏢', color: '#a78bfa', label: 'Contractor Concentration' },
-    duplicate_work:            { icon: '📋', color: '#ef4444', label: 'Duplicate Work' },
-    payment_speed:             { icon: '⚡', color: '#22c55e', label: 'Payment Speed' },
-    deduction_ratio:           { icon: '📉', color: '#ec4899', label: 'Deduction Ratio' },
-    benford_violation:         { icon: '🔢', color: '#06b6d4', label: 'Benford Violation' },
-    split_order:               { icon: '✂️', color: '#f97316', label: 'Split Order' },
-    repeat_contractor:         { icon: '🔄', color: '#84cc16', label: 'Repeat Contractor' },
-    repeat_work:               { icon: '🔁', color: '#fb923c', label: 'Repeat Work' },
-    bid_anomaly:               { icon: '📊', color: '#e879f9', label: 'Bid Anomaly' },
+    cost_outlier:              { icon: '💰', color: '#D97706', label: 'Cost Outlier' },
+    contractor_concentration:  { icon: '🏢', color: '#7C3AED', label: 'Contractor Concentration' },
+    duplicate_work:            { icon: '📋', color: '#DC2626', label: 'Duplicate Work' },
+    payment_speed:             { icon: '⚡', color: '#059669', label: 'Payment Speed' },
+    deduction_ratio:           { icon: '📉', color: '#DB2777', label: 'Deduction Ratio' },
+    benford_violation:         { icon: '🔢', color: '#0891B2', label: 'Benford Violation' },
+    split_order:               { icon: '✂️', color: '#EA580C', label: 'Split Order' },
+    repeat_contractor:         { icon: '🔄', color: '#65A30D', label: 'Repeat Contractor' },
+    repeat_work:               { icon: '🔁', color: '#E77E22', label: 'Repeat Work' },
+    bid_anomaly:               { icon: '📊', color: '#A855F7', label: 'Bid Anomaly' },
 };
 
 const CAT_COLORS = {
-    roads: '#f59e0b', drainage: '#06b6d4', buildings: '#a78bfa', lighting: '#facc15',
-    water: '#3b82f6', swm: '#22c55e', surveillance: '#ec4899', other: '#6b7280',
+    roads: '#D97706', drainage: '#0891B2', buildings: '#7C3AED', lighting: '#EAB308',
+    water: '#2563EB', swm: '#059669', surveillance: '#DB2777', other: '#6B7280',
 };
-
-const CHART_COLORS = ['#5b8def','#f59e0b','#22c55e','#ef4444','#a78bfa','#ec4899','#06b6d4','#84cc16','#f97316','#64748b'];
 
 /* ── Formatting helpers ────────────────────────────────── */
 function fmt(n) {
@@ -63,7 +61,7 @@ async function boot() {
     try {
         const files = ['meta.json','summary.json','wards.json','anomalies.json',
             'contractors.json','timeseries.json','zones.json','insights.json',
-            'repeat_works.json','bids.json','tenders.json'];
+            'repeat_works.json','bids.json','tenders.json','stories.json'];
         const results = await Promise.allSettled(files.map(f => loadJSON(f)));
         files.forEach((f, i) => {
             const key = f.replace('.json', '');
@@ -74,10 +72,12 @@ async function boot() {
         buildIndex();
         renderNav();
 
-        if (typeof initDashboard === 'function') initDashboard();
+        if (typeof initStories === 'function') initStories();
         if (typeof initMap === 'function') initMap();
         if (typeof initInvestigate === 'function') initInvestigate();
         if (typeof initCharts === 'function') initCharts();
+        // Delay so investigation content is rendered before observer attaches
+        setTimeout(() => initScrollSpy(), 100);
     } catch (e) {
         console.error('Boot error:', e);
     } finally {
@@ -91,49 +91,42 @@ function buildIndex() {
     DATA._wardIndex = {};
     DATA._typeIndex = {};
 
-    // Seed contractor index from contractors.json
     (Array.isArray(DATA.contractors) ? DATA.contractors : []).forEach(c => {
         const name = (c.contractor || '').toUpperCase();
         if (!name) return;
         DATA._contractorIndex[name] = { ...c, anomalies: [], wardSet: new Set(c.top_wards || []) };
     });
 
-    // Seed ward index from wards.json
     const wards = DATA.wards || {};
     Object.entries(wards).forEach(([num, w]) => {
         DATA._wardIndex[String(num)] = { ...w, ward_num: num, anomalies: [] };
     });
 
-    // Seed type index
     Object.keys(TYPE_META).forEach(t => {
         DATA._typeIndex[t] = { anomalies: [], critical: 0, high: 0, medium: 0, low: 0, total: 0 };
     });
 
-    // Iterate anomalies to cross-reference
     (Array.isArray(DATA.anomalies) ? DATA.anomalies : []).forEach(a => {
         const t = a.type || '';
         const ward = String(a.ward_number || '');
         const sev = a.severity || 'medium';
 
-        // Type index
         if (DATA._typeIndex[t]) {
             DATA._typeIndex[t].anomalies.push(a);
             DATA._typeIndex[t][sev] = (DATA._typeIndex[t][sev] || 0) + 1;
             DATA._typeIndex[t].total++;
         }
 
-        // Ward index
         if (ward && DATA._wardIndex[ward]) {
             DATA._wardIndex[ward].anomalies.push(a);
         }
 
-        // Contractor index — try to extract from description
         const desc = (a.description || '').toUpperCase();
         for (const cName of Object.keys(DATA._contractorIndex)) {
             if (cName.length > 3 && desc.includes(cName)) {
                 DATA._contractorIndex[cName].anomalies.push(a);
                 if (ward) DATA._contractorIndex[cName].wardSet.add(ward);
-                break; // one match is enough
+                break;
             }
         }
     });
@@ -147,26 +140,80 @@ function renderNav() {
 
     const critical = (m.critical_anomalies || 0) + (m.high_anomalies || 0);
     const pulseText = document.getElementById('nav-pulse-text');
-    if (pulseText) pulseText.textContent = `${critical} critical+high`;
+    if (pulseText) pulseText.textContent = `${critical.toLocaleString()} critical+high`;
 }
 
-function switchTab(name) {
-    document.querySelectorAll('.tab-content').forEach(t => {
-        t.classList.remove('active');
-        t.style.display = 'none';
+function scrollToSection(id) {
+    const el = document.getElementById(id);
+    if (el) {
+        const offset = document.getElementById('nav').offsetHeight + 16;
+        const top = el.getBoundingClientRect().top + window.pageYOffset - offset;
+        window.scrollTo({ top, behavior: 'smooth' });
+    }
+    // Update active tab
+    document.querySelectorAll('.nav-tab').forEach(b => {
+        b.classList.toggle('active', b.dataset.section === id);
     });
-    document.querySelectorAll('.nav-tab').forEach(b => b.classList.remove('active'));
-    const tab = document.getElementById('tab-' + name);
-    if (tab) { tab.classList.add('active'); tab.style.display = ''; }
-    document.querySelectorAll(`.nav-tab[data-tab="${name}"]`).forEach(b => b.classList.add('active'));
-    if (name === 'map' && typeof refreshMap === 'function') setTimeout(refreshMap, 100);
+    // If navigating to map, refresh it
+    if (id === 'map-section' && typeof refreshMap === 'function') setTimeout(refreshMap, 300);
+}
+
+/* ── Scroll Spy ────────────────────────────────────────── */
+function initScrollSpy() {
+    const sections = ['findings', 'numbers', 'map-section', 'explore', 'methodology'];
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                document.querySelectorAll('.nav-tab').forEach(b => {
+                    b.classList.toggle('active', b.dataset.section === entry.target.id);
+                });
+            }
+        });
+    }, { rootMargin: '-20% 0px -70% 0px' });
+
+    sections.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) observer.observe(el);
+    });
+
+    // Fade in investigations on scroll
+    const invObserver = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) entry.target.classList.add('visible');
+        });
+    }, { rootMargin: '0px 0px -10% 0px', threshold: 0.1 });
+
+    document.querySelectorAll('.investigation').forEach(el => invObserver.observe(el));
+}
+
+/* ── Explore tab switching ────────────────────────────── */
+function switchExploreView(view) {
+    document.getElementById('explore-investigate').style.display = view === 'investigate' ? '' : 'none';
+    document.getElementById('explore-data').style.display = view === 'data' ? '' : 'none';
+    document.querySelectorAll('.explore-tab').forEach(b => {
+        b.classList.toggle('active', b.textContent.toLowerCase().includes(view === 'investigate' ? 'invest' : 'data'));
+    });
+    if (view === 'data' && typeof switchDataTab === 'function') switchDataTab('contractors');
+}
+
+/* Keep legacy switchTab for investigate.js compatibility */
+function switchTab(name) {
+    if (name === 'investigate') {
+        scrollToSection('explore');
+        switchExploreView('investigate');
+    } else if (name === 'data') {
+        scrollToSection('explore');
+        switchExploreView('data');
+    } else if (name === 'map') {
+        scrollToSection('map-section');
+    }
 }
 
 /* ── Shared anomaly card renderer ──────────────────────── */
 function renderAnomalyCard(a) {
     const sev = a.severity || 'medium';
     const type = a.type || 'unknown';
-    const meta = TYPE_META[type] || { icon: '❓', color: '#5a6178', label: type };
+    const meta = TYPE_META[type] || { icon: '❓', color: '#6B7280', label: type };
 
     return `
     <div class="anomaly-card">
@@ -187,17 +234,17 @@ function renderAnomalyCard(a) {
     </div>`;
 }
 
-/* Navigate to ward in investigate tab */
 function showWard(wardNum) {
     if (!wardNum) return;
-    switchTab('investigate');
+    scrollToSection('explore');
+    switchExploreView('investigate');
     if (typeof showWardDossier === 'function') showWardDossier(wardNum);
 }
 
-/* Navigate to contractor in investigate tab */
 function showContractor(name) {
     if (!name) return;
-    switchTab('investigate');
+    scrollToSection('explore');
+    switchExploreView('investigate');
     if (typeof showContractorDossier === 'function') showContractorDossier(name);
 }
 

@@ -1,23 +1,23 @@
 /* =====================================================================
-   charts.js  –  Dashboard charts (money flow + category donut)
+   charts.js  –  Spending charts (light editorial theme)
    ===================================================================== */
 
 const CHART_COLORS = [
-    '#5b8def','#f59e0b','#22c55e','#f04444','#a78bfa',
-    '#ec4899','#06b6d4','#84cc16','#f97316','#64748b',
-    '#e879f9','#14b8a6','#fb923c','#818cf8','#facc15'
+    '#2563EB','#D97706','#059669','#DC2626','#7C3AED',
+    '#DB2777','#0891B2','#65A30D','#EA580C','#6B7280',
+    '#A855F7','#0D9488','#E77E22','#6366F1','#EAB308'
 ];
 
 const CHART_DEFAULTS = {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
-        legend: { labels: { color: '#9aa0b4', font: { family: 'Inter', size: 11 }, boxWidth: 10, padding: 12 } },
+        legend: { labels: { color: '#6B7280', font: { family: 'Inter', size: 11 }, boxWidth: 10, padding: 12 } },
         tooltip: {
-            backgroundColor: '#1c2030',
-            titleColor: '#e8eaed',
-            bodyColor: '#9aa0b4',
-            borderColor: '#262d3d',
+            backgroundColor: '#1F2937',
+            titleColor: '#F9FAFB',
+            bodyColor: '#D1D5DB',
+            borderColor: '#374151',
             borderWidth: 1,
             cornerRadius: 6,
             padding: 10,
@@ -26,8 +26,8 @@ const CHART_DEFAULTS = {
         }
     },
     scales: {
-        x: { ticks: { color: '#5f6680', font: { size: 10 } }, grid: { color: '#1e2433' } },
-        y: { ticks: { color: '#5f6680', font: { size: 10 } }, grid: { color: '#1e2433' } }
+        x: { ticks: { color: '#9CA3AF', font: { size: 10 } }, grid: { color: '#F3F4F6' } },
+        y: { ticks: { color: '#9CA3AF', font: { size: 10 } }, grid: { color: '#F3F4F6' } }
     }
 };
 
@@ -46,15 +46,12 @@ function renderFlowChart() {
     const years = Object.keys(ts).sort();
     if (!years.length) return;
 
-    // Build stacked datasets by top categories
     const catSet = new Set();
     years.forEach(y => Object.keys(ts[y].by_category || {}).forEach(c => catSet.add(c)));
     const topCats = [...catSet].map(c => ({
         name: c,
         total: years.reduce((s, y) => s + ((ts[y].by_category || {})[c] || 0), 0)
     })).sort((a, b) => b.total - a.total).slice(0, 8);
-
-    const otherLabel = 'Other';
 
     const datasets = topCats.map((c, i) => ({
         label: c.name,
@@ -65,7 +62,6 @@ function renderFlowChart() {
         borderRadius: 2,
     }));
 
-    // "Other" bucket
     const otherData = years.map(y => {
         const byC = ts[y].by_category || {};
         const topSet = new Set(topCats.map(c => c.name));
@@ -73,10 +69,10 @@ function renderFlowChart() {
     });
     if (otherData.some(v => v > 0)) {
         datasets.push({
-            label: otherLabel,
+            label: 'Other',
             data: otherData,
-            backgroundColor: '#3a3f52cc',
-            borderColor: '#3a3f52',
+            backgroundColor: '#D1D5DBcc',
+            borderColor: '#D1D5DB',
             borderWidth: 1,
             borderRadius: 2,
         });
@@ -91,12 +87,12 @@ function renderFlowChart() {
                 x: { ...CHART_DEFAULTS.scales.x, stacked: true },
                 y: {
                     ...CHART_DEFAULTS.scales.y, stacked: true,
-                    title: { display: true, text: 'Spend (₹ Lakhs)', color: '#5f6680', font: { size: 10 } }
+                    title: { display: true, text: 'Spend (₹ Lakhs)', color: '#9CA3AF', font: { size: 10 } }
                 }
             },
             plugins: {
                 ...CHART_DEFAULTS.plugins,
-                legend: { position: 'bottom', labels: { color: '#9aa0b4', font: { family: 'Inter', size: 10 }, boxWidth: 8, padding: 10 } },
+                legend: { position: 'bottom', labels: { color: '#6B7280', font: { family: 'Inter', size: 10 }, boxWidth: 8, padding: 10 } },
                 tooltip: {
                     ...CHART_DEFAULTS.plugins.tooltip,
                     mode: 'index',
@@ -123,13 +119,13 @@ function renderCategoryDonut() {
     const values = top.map(c => c[1]);
     if (otherVal > 0) { labels.push('Other'); values.push(otherVal); }
 
-    const bg = labels.map((_, i) => i < CHART_COLORS.length ? CHART_COLORS[i] : '#3a3f52');
+    const bg = labels.map((_, i) => i < CHART_COLORS.length ? CHART_COLORS[i] : '#D1D5DB');
 
     charts.categoryDonut = new Chart(el, {
         type: 'doughnut',
         data: {
             labels,
-            datasets: [{ data: values, backgroundColor: bg, borderWidth: 0, hoverOffset: 6 }]
+            datasets: [{ data: values, backgroundColor: bg, borderWidth: 2, borderColor: '#FFFFFF', hoverOffset: 6 }]
         },
         options: {
             responsive: true,
@@ -138,7 +134,7 @@ function renderCategoryDonut() {
             plugins: {
                 legend: {
                     position: 'right',
-                    labels: { color: '#9aa0b4', font: { family: 'Inter', size: 10 }, boxWidth: 8, padding: 8 }
+                    labels: { color: '#6B7280', font: { family: 'Inter', size: 10 }, boxWidth: 8, padding: 8 }
                 },
                 tooltip: {
                     ...CHART_DEFAULTS.plugins.tooltip,

@@ -3,32 +3,36 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bangalore Public Works Tracker</title>
-    <meta name="description" content="Automated anomaly detection in BBMP public works spending across 198 wards. Track contractor concentration, cost overruns, and suspicious patterns.">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏗</text></svg>">
+    <title>BBMP Public Works Tracker — An Investigation into ₹14,041 Crores</title>
+    <meta name="description" content="An automated investigation into BBMP public works spending across 198 wards. 12,815 anomalies detected in ₹14,041 crores of public money.">
+    <meta property="og:title" content="BBMP Public Works Tracker — ₹14,041 Crores Under the Microscope">
+    <meta property="og:description" content="12,815 anomalies detected across 45,522 work orders. Duplicate works, split orders, zero-day payments, and more.">
+    <meta property="og:type" content="website">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔍</text></svg>">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&family=Playfair+Display:wght@700;800;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
     <nav id="nav">
         <div class="nav-inner">
             <div class="nav-brand">
-                <span class="nav-icon">🏗</span>
-                <span class="nav-title">BBMP Works Tracker</span>
+                <span class="nav-icon">🔍</span>
+                <span class="nav-title">BBMP Public Works Tracker</span>
             </div>
-            <div class="nav-pulse" id="nav-pulse" onclick="switchTab('investigate')">
+            <div class="nav-pulse" id="nav-pulse" onclick="scrollToSection('findings')">
                 <span class="nav-pulse-dot"></span>
                 <span id="nav-pulse-text">—</span>
             </div>
             <div class="nav-tabs">
-                <button class="nav-tab active" data-tab="dashboard" onclick="switchTab('dashboard')">Dashboard</button>
-                <button class="nav-tab" data-tab="investigate" onclick="switchTab('investigate')">Investigate</button>
-                <button class="nav-tab" data-tab="map" onclick="switchTab('map')">Map</button>
-                <button class="nav-tab" data-tab="data" onclick="switchTab('data')">Data</button>
+                <button class="nav-tab active" data-section="findings" onclick="scrollToSection('findings')">Findings</button>
+                <button class="nav-tab" data-section="numbers" onclick="scrollToSection('numbers')">Data</button>
+                <button class="nav-tab" data-section="map-section" onclick="scrollToSection('map-section')">Map</button>
+                <button class="nav-tab" data-section="explore" onclick="scrollToSection('explore')">Explore</button>
+                <button class="nav-tab" data-section="methodology" onclick="scrollToSection('methodology')">Methods</button>
             </div>
             <div class="nav-meta">
                 <span id="nav-updated"></span>
@@ -36,105 +40,72 @@
         </div>
     </nav>
 
-    <main>
-        <div id="loading" class="loading" style="display:none;">
-            <div class="spinner"></div>
-            <span>Loading data…</span>
+    <!-- ====== HERO ====== -->
+    <section class="hero" id="hero">
+        <div class="hero-inner">
+            <div class="hero-label">An Automated Investigation</div>
+            <h1><span class="hl" id="hero-amount">₹14,041 Crores</span> of Public Money, Under the Microscope</h1>
+            <p class="hero-sub">
+                Algorithmic analysis of every BBMP public works order from 2007 to 2025.
+                Ten detection heuristics. <span id="hero-anomaly-count">12,815</span> anomalies flagged.
+            </p>
+            <div class="hero-stats" id="hero-stats">
+                <div class="hero-stat"><div class="hero-stat-value red" id="hs-critical">—</div><div class="hero-stat-label">Critical + High<br>Anomalies</div></div>
+                <div class="hero-stat"><div class="hero-stat-value" id="hs-orders">—</div><div class="hero-stat-label">Work Orders<br>Analyzed</div></div>
+                <div class="hero-stat"><div class="hero-stat-value" id="hs-wards">—</div><div class="hero-stat-label">Wards<br>Covered</div></div>
+                <div class="hero-stat"><div class="hero-stat-value" id="hs-contractors">—</div><div class="hero-stat-label">Contractors<br>Tracked</div></div>
+            </div>
+            <a class="hero-cta" onclick="scrollToSection('findings')">Read the findings ↓</a>
         </div>
+    </section>
 
-        <!-- ====== DASHBOARD TAB ====== -->
-        <section class="tab-content active" id="tab-dashboard">
-            <div id="alert-banner"></div>
-            <div id="scorecard" class="scorecard"></div>
+    <div id="loading" class="loading" style="display:none;">
+        <div class="spinner"></div>
+        <span>Loading data…</span>
+    </div>
 
-            <div class="section-header">
-                <h2>🔍 Worst Offenders</h2>
-                <button class="link-btn" onclick="switchTab('investigate')">Investigate All →</button>
-            </div>
-            <div id="offenders-grid" class="offenders-grid"></div>
+    <main>
+        <!-- ====== KEY FINDINGS ====== -->
+        <section class="findings-section" id="findings">
+            <div class="section-label">Key Findings</div>
+            <div class="section-title">Five Patterns That Demand Answers</div>
+            <p class="section-desc">Each finding below was detected algorithmically from publicly available BBMP data. Click into any investigation to explore the underlying evidence.</p>
 
-            <div class="section-header">
-                <h2>🧩 Pattern Detection</h2>
-                <span class="section-sub">10 anomaly heuristics across all wards</span>
-            </div>
-            <div id="pattern-grid" class="pattern-grid"></div>
-
-            <div class="section-header">
-                <h2>💰 Money Flow</h2>
-            </div>
-            <div class="two-col-grid">
-                <div class="card">
-                    <div class="card-header"><h3>Spending by Year &amp; Category</h3></div>
-                    <div class="card-body chart-container-lg"><canvas id="chart-flow"></canvas></div>
-                </div>
-                <div class="card">
-                    <div class="card-header"><h3>Category Breakdown</h3></div>
-                    <div class="card-body chart-container"><canvas id="chart-category-donut"></canvas></div>
-                </div>
-            </div>
-
-            <div class="section-header">
-                <h2>📑 Tender vs Actual Spend</h2>
-                <span class="section-sub">Estimated tender value vs actual payment — by zone (2013–2018)</span>
-            </div>
-            <div id="tender-zone-gaps" class="card">
-                <div class="card-body" id="tender-zone-bars"></div>
-            </div>
-
-            <div class="section-header">
-                <h2>🗺️ Zone Comparison</h2>
-                <span class="section-sub">Spend vs anomalies by BBMP zone</span>
-            </div>
-            <div class="card">
-                <div class="card-body" id="zone-bars"></div>
-            </div>
+            <article class="investigation" id="inv-kridl"></article>
+            <article class="investigation" id="inv-tenders"></article>
+            <article class="investigation" id="inv-splits"></article>
+            <article class="investigation" id="inv-payments"></article>
+            <article class="investigation" id="inv-repeats"></article>
         </section>
 
-        <!-- ====== INVESTIGATE TAB ====== -->
-        <section class="tab-content" id="tab-investigate">
-            <div class="investigate-layout">
-                <aside class="inv-sidebar">
-                    <div class="inv-sidebar-section">
-                        <div class="inv-sidebar-label">Search</div>
-                        <input type="text" id="inv-search" class="inv-search" placeholder="Contractor, ward, or keyword…">
-                    </div>
-                    <div class="inv-sidebar-section">
-                        <div class="inv-sidebar-label">View</div>
-                        <div class="inv-entity-btns">
-                            <button class="inv-entity-btn active" data-entity="anomalies" onclick="setEntity('anomalies')">Anomalies</button>
-                            <button class="inv-entity-btn" data-entity="contractors" onclick="setEntity('contractors')">Contractors</button>
-                            <button class="inv-entity-btn" data-entity="wards" onclick="setEntity('wards')">Wards</button>
-                        </div>
-                    </div>
-                    <div class="inv-sidebar-section">
-                        <div class="inv-sidebar-label">Severity</div>
-                        <div class="inv-sev-btns">
-                            <button class="inv-sev-btn active" data-sev="critical" onclick="toggleSev('critical')"><span class="dot"></span>Critical</button>
-                            <button class="inv-sev-btn active" data-sev="high" onclick="toggleSev('high')"><span class="dot"></span>High</button>
-                            <button class="inv-sev-btn" data-sev="medium" onclick="toggleSev('medium')"><span class="dot"></span>Medium</button>
-                            <button class="inv-sev-btn" data-sev="low" onclick="toggleSev('low')"><span class="dot"></span>Low</button>
-                        </div>
-                    </div>
-                    <div class="inv-sidebar-section">
-                        <div class="inv-sidebar-label">Anomaly Type</div>
-                        <div id="inv-type-filter" class="inv-cat-list"></div>
-                    </div>
-                    <div class="inv-sidebar-section">
-                        <div class="inv-sidebar-label">Category</div>
-                        <div id="inv-cat-filter" class="inv-cat-list"></div>
-                    </div>
-                </aside>
-                <div class="inv-main">
-                    <div id="inv-dossier"></div>
-                    <div id="inv-count" class="data-count"></div>
-                    <div id="inv-results" class="anomaly-list"></div>
-                    <button id="inv-load-more" class="btn-secondary hidden" onclick="invLoadMore()">Load More</button>
+        <!-- ====== BY THE NUMBERS ====== -->
+        <section class="by-the-numbers" id="numbers">
+            <div class="section-label">By The Numbers</div>
+            <div class="section-title">A Statistical Summary</div>
+            <div class="stats-grid" id="stats-grid"></div>
+        </section>
+
+        <!-- ====== SPENDING CHARTS ====== -->
+        <section class="charts-section" id="charts-section">
+            <div class="section-label">Spending Patterns</div>
+            <div class="section-title" style="font-family:var(--font-headline);font-size:2rem;font-weight:800;letter-spacing:-0.02em;">Where the Money Goes</div>
+            <div class="charts-grid">
+                <div class="chart-card">
+                    <div class="chart-card-header"><h3>Spending by Year &amp; Category</h3></div>
+                    <div class="chart-card-body chart-container-lg"><canvas id="chart-flow"></canvas></div>
+                </div>
+                <div class="chart-card">
+                    <div class="chart-card-header"><h3>Category Breakdown</h3></div>
+                    <div class="chart-card-body chart-container"><canvas id="chart-category-donut"></canvas></div>
                 </div>
             </div>
         </section>
 
-        <!-- ====== MAP TAB ====== -->
-        <section class="tab-content" id="tab-map">
+        <!-- ====== MAP ====== -->
+        <section class="map-section" id="map-section">
+            <div class="section-label">Geographic Analysis</div>
+            <div class="section-title">Corruption Heatmap</div>
+            <p class="section-desc">Ward-level anomaly scores across Bangalore. Click any ward to see its profile.</p>
             <div class="map-layout">
                 <div class="map-main">
                     <div class="map-toolbar">
@@ -150,56 +121,138 @@
                 </div>
                 <div id="ward-detail" class="ward-detail">
                     <div class="ward-detail-placeholder">
-                        <p>👈 Click a ward on the map to see details</p>
+                        <p>Click a ward on the map to see details</p>
                     </div>
                 </div>
             </div>
         </section>
 
-        <!-- ====== DATA TAB ====== -->
-        <section class="tab-content" id="tab-data">
-            <div class="section-header" style="margin-top:0;">
-                <h2>📋 Raw Data</h2>
+        <!-- ====== EXPLORE DATA ====== -->
+        <section class="explore-section" id="explore">
+            <div class="section-label">Explore</div>
+            <div class="section-title">Dig Into the Evidence</div>
+            <p class="section-desc">Search, filter, and cross-reference all 12,815 anomalies, 10,816 contractors, and 198 wards.</p>
+
+            <div class="explore-tabs">
+                <button class="explore-tab active" onclick="switchExploreView('investigate')">Investigate</button>
+                <button class="explore-tab" onclick="switchExploreView('data')">Data Tables</button>
             </div>
-            <div class="data-sub-tabs">
-                <button class="data-sub-tab active" onclick="switchDataTab('contractors')">Contractors</button>
-                <button class="data-sub-tab" onclick="switchDataTab('repeat_works')">Repeat Works</button>
-                <button class="data-sub-tab" onclick="switchDataTab('bids')">Bid Analysis</button>
-                <button class="data-sub-tab" onclick="switchDataTab('tenders')">Tenders</button>
-                <button class="data-sub-tab" onclick="switchDataTab('tender_gaps')">Cost Gaps</button>
-                <button class="data-sub-tab" onclick="switchDataTab('anomalies')">All Anomalies</button>
+
+            <!-- Investigate view -->
+            <div id="explore-investigate">
+                <div class="investigate-layout">
+                    <aside class="inv-sidebar">
+                        <div class="inv-sidebar-section">
+                            <div class="inv-sidebar-label">Search</div>
+                            <input type="text" id="inv-search" class="inv-search" placeholder="Contractor, ward, or keyword…">
+                        </div>
+                        <div class="inv-sidebar-section">
+                            <div class="inv-sidebar-label">View</div>
+                            <div class="inv-entity-btns">
+                                <button class="inv-entity-btn active" data-entity="anomalies" onclick="setEntity('anomalies')">Anomalies</button>
+                                <button class="inv-entity-btn" data-entity="contractors" onclick="setEntity('contractors')">Contractors</button>
+                                <button class="inv-entity-btn" data-entity="wards" onclick="setEntity('wards')">Wards</button>
+                            </div>
+                        </div>
+                        <div class="inv-sidebar-section">
+                            <div class="inv-sidebar-label">Severity</div>
+                            <div class="inv-sev-btns">
+                                <button class="inv-sev-btn active" data-sev="critical" onclick="toggleSev('critical')"><span class="dot"></span>Critical</button>
+                                <button class="inv-sev-btn active" data-sev="high" onclick="toggleSev('high')"><span class="dot"></span>High</button>
+                                <button class="inv-sev-btn" data-sev="medium" onclick="toggleSev('medium')"><span class="dot"></span>Medium</button>
+                                <button class="inv-sev-btn" data-sev="low" onclick="toggleSev('low')"><span class="dot"></span>Low</button>
+                            </div>
+                        </div>
+                        <div class="inv-sidebar-section">
+                            <div class="inv-sidebar-label">Anomaly Type</div>
+                            <div id="inv-type-filter" class="inv-cat-list"></div>
+                        </div>
+                        <div class="inv-sidebar-section">
+                            <div class="inv-sidebar-label">Category</div>
+                            <div id="inv-cat-filter" class="inv-cat-list"></div>
+                        </div>
+                    </aside>
+                    <div class="inv-main">
+                        <div id="inv-dossier"></div>
+                        <div id="inv-count" class="data-count"></div>
+                        <div id="inv-results" class="anomaly-list"></div>
+                        <button id="inv-load-more" class="btn-secondary hidden" onclick="invLoadMore()">Load More</button>
+                    </div>
+                </div>
             </div>
-            <div class="data-toolbar">
-                <input type="text" id="data-search" class="search-input" placeholder="Search…">
-                <span id="data-count" class="data-count"></span>
-            </div>
-            <div class="card">
-                <div class="card-body" style="overflow-x:auto;padding:0;max-height:70vh;overflow-y:auto;">
+
+            <!-- Data tables view -->
+            <div id="explore-data" style="display:none;">
+                <div class="data-sub-tabs">
+                    <button class="data-sub-tab active" onclick="switchDataTab('contractors')">Contractors</button>
+                    <button class="data-sub-tab" onclick="switchDataTab('repeat_works')">Repeat Works</button>
+                    <button class="data-sub-tab" onclick="switchDataTab('bids')">Bid Analysis</button>
+                    <button class="data-sub-tab" onclick="switchDataTab('tenders')">Tenders</button>
+                    <button class="data-sub-tab" onclick="switchDataTab('tender_gaps')">Cost Gaps</button>
+                    <button class="data-sub-tab" onclick="switchDataTab('anomalies')">All Anomalies</button>
+                </div>
+                <div class="data-toolbar">
+                    <input type="text" id="data-search" class="search-input" placeholder="Search…">
+                    <span id="data-count" class="data-count"></span>
+                </div>
+                <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);overflow-x:auto;max-height:70vh;overflow-y:auto;">
                     <table id="data-table" class="data-table">
                         <thead id="data-thead"></thead>
                         <tbody id="data-tbody"></tbody>
                     </table>
                 </div>
+                <button id="data-load-more" class="btn-secondary hidden" onclick="dataLoadMore()">Load More</button>
             </div>
-            <button id="data-load-more" class="btn-secondary hidden" onclick="dataLoadMore()">Load More</button>
+        </section>
+
+        <!-- ====== METHODOLOGY ====== -->
+        <section class="methodology" id="methodology">
+            <div class="section-label">Methodology</div>
+            <div class="section-title">How We Detect Anomalies</div>
+            <div class="method-grid" id="method-grid">
+                <div class="method-card"><h4>Cost Outliers</h4><p>Flags orders exceeding 3x the interquartile range above Q3 within their ward-category group. Minimum threshold: ₹5 lakhs.</p></div>
+                <div class="method-card"><h4>Duplicate Work</h4><p>Detects similar work descriptions (Jaccard similarity ≥ 0.85) within the same ward in a 12-month window.</p></div>
+                <div class="method-card"><h4>Split Orders</h4><p>Identifies 3+ orders clustered just below procurement thresholds (₹5L, ₹10L, ₹25L, ₹50L, ₹1Cr) within 15% band.</p></div>
+                <div class="method-card"><h4>Payment Speed</h4><p>Flags orders paid in the bottom 5th percentile for turnaround time — suspiciously fast approvals.</p></div>
+                <div class="method-card"><h4>Benford's Law</h4><p>Tests first-digit distribution of amounts per ward against expected natural distribution (chi-squared, p&lt;0.05).</p></div>
+                <div class="method-card"><h4>Contractor Concentration</h4><p>Flags contractors controlling &gt;15% of a ward's orders or &gt;5% of citywide orders.</p></div>
+                <div class="method-card"><h4>Bid Anomaly</h4><p>Compares order costs against Karnataka SoR 2024-25 benchmark rates. Flags orders &gt;2x ward-category median.</p></div>
+                <div class="method-card"><h4>Deduction Ratio</h4><p>Flags unusual deduction/gross ratios (beyond 2.5x IQR) — potential accounting manipulation.</p></div>
+                <div class="method-card"><h4>Repeat Work</h4><p>Detects identical work types at the same location across 3+ fiscal years — chronic budget cycling.</p></div>
+                <div class="method-card"><h4>Repeat Contractor</h4><p>Flags contractors with &gt;30% of ward-category orders — potential favoritism patterns.</p></div>
+            </div>
+            <div style="max-width:var(--narrow);">
+                <p style="font-size:0.82rem;color:var(--text-muted);line-height:1.7;">
+                    <strong>Data Sources:</strong> All work order data sourced from
+                    <a href="https://data.opencity.in" target="_blank">OpenCity.in</a> (BBMP's open data portal).
+                    Tender data from BBMP e-procurement records (2013-2018).
+                    Ward boundaries from <a href="https://github.com/datameet/Municipal_Spatial_Data" target="_blank">DataMeet</a>.
+                    Cost benchmarks from Karnataka Schedule of Rates 2024-25.
+                </p>
+                <p style="font-size:0.82rem;color:var(--text-muted);line-height:1.7;margin-top:0.75rem;">
+                    <strong>Pipeline:</strong> Data is fetched, normalized, and analyzed daily via automated pipeline.
+                    Source code on <a href="https://github.com/adityabandi/bangalore-public-works-tracker" target="_blank">GitHub</a>.
+                </p>
+            </div>
         </section>
     </main>
 
     <footer>
         <div class="footer-inner">
             <p>
-                Data from <a href="https://data.opencity.in" target="_blank">OpenCity.in</a> •
-                Boundaries from <a href="https://github.com/datameet/Municipal_Spatial_Data" target="_blank">DataMeet</a> •
+                Data from <a href="https://data.opencity.in" target="_blank">OpenCity.in</a> &middot;
+                Boundaries from <a href="https://github.com/datameet/Municipal_Spatial_Data" target="_blank">DataMeet</a> &middot;
                 <a href="https://github.com/adityabandi/bangalore-public-works-tracker" target="_blank">Source Code</a>
             </p>
             <p class="disclaimer">
                 This tool flags statistical anomalies for further investigation. Flagged items are not accusations of wrongdoing.
+                Anomaly detection is algorithmic and may produce false positives.
             </p>
         </div>
     </footer>
 
     <script src="js/app.js"></script>
-    <script src="js/dashboard.js"></script>
+    <script src="js/stories.js"></script>
     <script src="js/investigate.js"></script>
     <script src="js/charts.js"></script>
     <script src="js/map.js"></script>

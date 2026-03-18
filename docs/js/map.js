@@ -1,13 +1,13 @@
 /* =====================================================================
-   map.js  –  Leaflet choropleth with metric selector & ward details
+   map.js  –  Leaflet choropleth (light theme)
    ===================================================================== */
 
 let map, geoLayer, wardLookup = {};
 const METRICS = {
-    anomaly_score:     { label: 'Anomaly Score', fmt: v => (v||0).toFixed(2), palette: ['#22c55e','#f59e0b','#f04444'] },
-    total_gross_lakhs: { label: 'Total Spend (₹L)', fmt: v => fmtL(v||0), palette: ['#1a3a5c','#3b82f6','#93c5fd'] },
-    anomaly_count:     { label: 'Anomalies', fmt: v => String(v||0), palette: ['#1a3a2c','#f59e0b','#f04444'] },
-    total_orders:      { label: 'Total Orders', fmt: v => String(v||0), palette: ['#1a2a3a','#5b8def','#c4d5f7'] }
+    anomaly_score:     { label: 'Anomaly Score', fmt: v => (v||0).toFixed(2), palette: ['#DCFCE7','#F59E0B','#DC2626'] },
+    total_gross_lakhs: { label: 'Total Spend (₹L)', fmt: v => fmtL(v||0), palette: ['#DBEAFE','#2563EB','#1E3A8A'] },
+    anomaly_count:     { label: 'Anomalies', fmt: v => String(v||0), palette: ['#FEF3C7','#F59E0B','#DC2626'] },
+    total_orders:      { label: 'Total Orders', fmt: v => String(v||0), palette: ['#E0E7FF','#6366F1','#312E81'] }
 };
 
 function initMap() {
@@ -27,7 +27,7 @@ function initMap() {
         .addAttribution('© <a href="https://www.openstreetmap.org/copyright">OSM</a>')
         .addTo(map);
 
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
         maxZoom: 18, subdomains: 'abcd'
     }).addTo(map);
 
@@ -72,9 +72,9 @@ function renderGeo(geo) {
             const v = getVal(w, metric);
             return {
                 fillColor: colorScale(v, mn, mx, METRICS[metric].palette),
-                weight: 0.8,
-                color: '#262d3d',
-                fillOpacity: 0.75
+                weight: 1,
+                color: '#D1D5DB',
+                fillOpacity: 0.8
             };
         },
         onEachFeature: (f, layer) => {
@@ -86,7 +86,7 @@ function renderGeo(geo) {
             });
             layer.on('click', () => {
                 showWardDetail(wn);
-                showWard(wn);  // cross-link to investigate dossier
+                showWard(wn);
             });
         }
     }).addTo(map);
@@ -130,21 +130,20 @@ function renderLegend(mn, mx, metric) {
     if (!el) {
         el = document.createElement('div');
         el.id = 'map-legend';
-        el.style.cssText = 'position:absolute;bottom:1.5rem;left:1.5rem;z-index:10;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:0.5rem 0.75rem;font-size:0.7rem;';
+        el.style.cssText = 'position:absolute;bottom:1.5rem;left:1.5rem;z-index:10;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:0.5rem 0.75rem;font-size:0.7rem;box-shadow:0 2px 8px rgba(0,0,0,0.08);';
         document.getElementById('map').parentElement.style.position = 'relative';
         document.getElementById('map').parentElement.appendChild(el);
     }
     const pal = METRICS[metric].palette;
     el.innerHTML = `
-        <div style="font-weight:600;margin-bottom:0.25rem;color:var(--text-secondary);">${METRICS[metric].label}</div>
+        <div style="font-weight:600;margin-bottom:0.25rem;color:var(--text-muted);">${METRICS[metric].label}</div>
         <div style="display:flex;align-items:center;gap:0.5rem;">
-            <span style="color:var(--text-muted)">${METRICS[metric].fmt(mn)}</span>
+            <span style="color:var(--text-dim)">${METRICS[metric].fmt(mn)}</span>
             <div style="width:80px;height:8px;border-radius:4px;background:linear-gradient(to right,${pal[0]},${pal[1]},${pal[2]});"></div>
-            <span style="color:var(--text-muted)">${METRICS[metric].fmt(mx)}</span>
+            <span style="color:var(--text-dim)">${METRICS[metric].fmt(mx)}</span>
         </div>`;
 }
 
-/* ── ward detail ────────────────────────────────────────── */
 function showWardDetail(wardNo) {
     const panel = document.getElementById('ward-detail');
     if (!panel) return;
@@ -204,7 +203,6 @@ function showWardDetail(wardNo) {
         </div>` : ''}`;
 }
 
-/* ── controls ──────────────────────────────────────────── */
 function wireControls() {
     const sel = document.getElementById('map-metric');
     if (sel) sel.addEventListener('change', () => {
